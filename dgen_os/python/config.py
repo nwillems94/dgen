@@ -45,6 +45,11 @@ delete_output_schema = False
 dynamic_system_sizing = True
 
 #==============================================================================
+#  Advanced customer decision making toggles
+#==============================================================================
+realtime_calibration = False
+
+#==============================================================================
 #  Runtime Tests
 #==============================================================================
 NULL_COLUMN_EXCEPTIONS = ['state_incentives', 'pct_state_incentives', 'batt_dispatch_profile', 'export_tariff_results']

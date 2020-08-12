@@ -36,6 +36,7 @@ class ModelSettings(object):
         self.local_cores = None  # int < cores on machine
         self.delete_output_schema = None  # bool
         self.dynamic_system_sizing = None  # bool
+        self.realtime_calibration = None # bool
 
     def set(self, attr, value):
 
@@ -57,6 +58,7 @@ class ModelSettings(object):
         self.set_pg_params(config.pg_params_file)
         self.set('delete_output_schema', config.delete_output_schema)
         self.set('dynamic_system_sizing', config.dynamic_system_sizing)
+        self.set('realtime_calibration', config.realtime_calibration)
 
     def set_pg_params(self, pg_params_file):
 
@@ -236,6 +238,13 @@ class ModelSettings(object):
                 raise TypeError('Invalid {0}: {1}'.format(property_name, e))
                 
         elif property_name == 'dynamic_system_sizing':
+            # check type
+            try:
+                check_type(self.get(property_name), bool)
+            except TypeError as e:
+                raise TypeError('Invalid {0}: {1}'.format(property_name, e))
+        
+        elif property_name == 'realtime_calibration':
             # check type
             try:
                 check_type(self.get(property_name), bool)
