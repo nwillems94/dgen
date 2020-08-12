@@ -37,6 +37,7 @@ class ModelSettings(object):
         self.delete_output_schema = None  # bool
         self.dynamic_system_sizing = None  # bool
         self.realtime_calibration = None # bool
+        self.propensity_model = None # bool
 
     def set(self, attr, value):
 
@@ -59,6 +60,7 @@ class ModelSettings(object):
         self.set('delete_output_schema', config.delete_output_schema)
         self.set('dynamic_system_sizing', config.dynamic_system_sizing)
         self.set('realtime_calibration', config.realtime_calibration)
+        self.set('propensity_model', config.propensity_model)
 
     def set_pg_params(self, pg_params_file):
 
@@ -245,6 +247,13 @@ class ModelSettings(object):
                 raise TypeError('Invalid {0}: {1}'.format(property_name, e))
         
         elif property_name == 'realtime_calibration':
+            # check type
+            try:
+                check_type(self.get(property_name), bool)
+            except TypeError as e:
+                raise TypeError('Invalid {0}: {1}'.format(property_name, e))
+        
+        elif property_name == 'propensity_model':
             # check type
             try:
                 check_type(self.get(property_name), bool)
