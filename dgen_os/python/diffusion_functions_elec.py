@@ -26,7 +26,8 @@ logger = utilfunc.get_logger()
 # ^^^^  Diffusion Calculator  ^^^^
 @decorators.fn_timer(logger = logger, tab_level = 2, prefix = '')
 def calc_diffusion_solar(df, is_first_year, bass_params, year,
-                           override_p_value = None, override_q_value = None, override_teq_yr1_value = None):
+                           override_p_value = None, override_q_value = None, override_teq_yr1_value = None,
+                           no_constraint=False, id_var="state_abbr"):
     """
     Calculates the market share (ms) added in the solve year. Market share must be less
     than max market share (mms) except initial ms is greater than the calculated mms.
@@ -44,7 +45,7 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
     bass_params = bass_params[bass_params['tech']=='solar']    
     
     # set p/q/teq_yr1 params    
-    df = pd.merge(df, bass_params[['state_abbr', 'bass_param_p', 'bass_param_q', 'teq_yr1', 'sector_abbr']], how = 'left', on  = ['state_abbr','sector_abbr'])
+    df = pd.merge(df, bass_params[[id_var, 'bass_param_p', 'bass_param_q', 'teq_yr1', 'sector_abbr']], how = 'left', on  = [id_var,'sector_abbr'])
     
     # calc diffusion market share
     df = calc_diffusion_market_share(df, is_first_year)
@@ -75,7 +76,7 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
     df['batt_kwh_cum'] = df['batt_kwh_cum_last_year'] + df['new_batt_kwh']
     
     # constrain state-level capacity totals to known historical values
-    if year in (2014, 2016, 2018):
+    if year in (2014, 2016, 2018) and no_constraint==False:
         group_cols = ['state_abbr', 'sector_abbr', 'year']
         state_capacity_total = (df[group_cols+['system_kw_cum', 'batt_kw_cum', 'batt_kwh_cum', 'agent_id']].groupby(group_cols)
                                                                             .agg({'system_kw_cum':'sum', 'batt_kw_cum':'sum', 'batt_kwh_cum':'sum', 'agent_id':'count'})
