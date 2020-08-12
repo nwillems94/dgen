@@ -15,6 +15,7 @@ import agent_mutation
 import diffusion_functions_elec
 import financial_functions
 import input_data_functions as iFuncs
+import calibration_functions as calib
 
 #==============================================================================
 # raise  numpy and pandas warnings as exceptions
@@ -86,7 +87,13 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
             max_market_share = datfunc.get_max_market_share(con, schema)
             load_growth_scenario = scenario_settings.load_growth.lower()
             inflation_rate = datfunc.get_annual_inflation(con, scenario_settings.schema)
-            bass_params = datfunc.get_bass_params(con, scenario_settings.schema)
+            
+            if model_settings.realtime_calibration == False:
+                bass_params = datfunc.get_bass_params(con, scenario_settings.schema)
+            #import non-economic agent attributes - /input_data or postgres?
+            ### acs5 = datfun.acs5()
+            acs5 = pd.read_csv('../input_data/non_economic/acs5_processed.csv', index_col=0)
+            refUSA = pd.read_csv('../input_data/non_economic/refUSA_processed.csv', index_col=0)
 
             # get settings whether to use pre-generated agent file ('User Defined'- provide pkl file name) or generate new agents
             agent_file_status = scenario_settings.agent_file_status
@@ -106,6 +113,18 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
 
                 # Get set of columns that define agent's immutable attributes
                 cols_base = list(solar_agents.df.columns)
+                
+                # Calculate Bass parameters based on historic adoption
+                if model_settings.realtime_calibration == True:
+                    calibration_time = time.time()
+                    # group agents together into larger markets
+                    agent_groups = calib.market_grouper(refUSA, solar_agents.df.reset_index(), "kmeans",\
+                                           kmeans_vars=['OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE','CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE','FIND_DIV_1000','ESTMTD_HOME_VAL_DIV_1000','PPI_DIV_1000'], verbose=True)
+                    # calibrate Bass parameters at the market level
+                    bass_params = calib.calibrate_Bass(agent_groups)
+                    bass_params = pd.merge(agent_groups[['group','pgid','sector_abbr']].drop_duplicates(), bass_params, how='left', on=['group','sector_abbr'])                        
+                    
+                    print("CALIBRATION TIME", time.time()-calibration_time)
 
             #==============================================================================
             # TECHNOLOGY DEPLOYMENT
@@ -234,7 +253,10 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         solar_agents.on_frame(agent_mutation.elec.apply_market_last_year, market_last_year_df)
 
                     # Calculate diffusion based on economics and bass diffusion
-                    solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year)
+                    if model_settings.realtime_calibration == True:
+                        solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year, id_var="pgid")
+                    else:
+                        solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year)
 
                     # Estimate total generation
                     solar_agents.on_frame(agent_mutation.elec.estimate_total_generation)
