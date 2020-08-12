@@ -16,6 +16,7 @@ dependencies:
   - psutil
   - psycopg2
   - scipy
+  - scikit-learn
   - spyder
   - sqlalchemy
   - nrel-pysam
