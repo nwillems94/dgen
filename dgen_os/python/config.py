@@ -41,6 +41,7 @@ dynamic_system_sizing = True
 #  Advanced customer decision making toggles
 #==============================================================================
 realtime_calibration = False
+propensity_model = False
 
 #==============================================================================
 #  Runtime Tests
