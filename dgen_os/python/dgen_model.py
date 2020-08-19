@@ -125,6 +125,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                     # calibrate Bass parameters at the market level
                     bass_params = calib.calibrate_Bass(agent_groups)
                     bass_params = pd.merge(agent_groups[['group','pgid','sector_abbr']].drop_duplicates(), bass_params, how='left', on=['group','sector_abbr'])
+                    bass_params.to_csv(out_dir + '/calibrated_Bass.csv', index=False)
                     
                     if model_settings.propensity_model == True:                 
                         agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'), a=2000)
