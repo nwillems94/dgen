@@ -70,3 +70,4 @@ VERBOSE = False
 cwd = os.getcwd() #should be /python
 pdir = os.path.abspath('..') #should be /dgen or whatever it is called
 INSTALLED_CAPACITY_BY_STATE = os.path.join(pdir, 'input_data','installed_capacity_mw_by_state_sector.csv')
+INSTALLED_CAPACITY_BY_COUNTY = os.path.join(pdir, 'input_data','installed_count_capacity_kw_by_county_sector.csv')

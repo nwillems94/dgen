@@ -92,6 +92,11 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
         
         # read csv of historical capacity values by state and sector
         historical_state_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_STATE)
+        # historical_county_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_COUNTY)[['state','state_abbr','sector_abbr','year','imputed_cum_size_kW']]
+        # historical_state_capacity_df = (historical_county_capacity_df
+        #                                 .groupby(['state','state_abbr','sector_abbr','year'])
+        #                                 .sum().div(1000).rename(columns={'imputed_cum_size_kW':'observed_capacity_mw'})
+        #                                 .reset_index().query("year in [2014,2016,2018]"))
         
         # join historical data to agent df
         df = pd.merge(df, historical_state_capacity_df, how='left', on=['state_abbr', 'sector_abbr', 'year'])
