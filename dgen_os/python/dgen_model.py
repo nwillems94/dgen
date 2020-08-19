@@ -128,8 +128,8 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'), a=2000)
                         agent_val.group = agent_val.group.astype(np.int64)
                         propensities.to_csv(out_dir + '/propensities.csv', index=False)
-
-                    print("CALIBRATION TIME", time.time()-calibration_time)
+                    
+                    logger.info('\t\tCalibration of Bass parameters complete in {}'.format(time.time()-calibration_time))
 
             #==============================================================================
             # TECHNOLOGY DEPLOYMENT
@@ -262,6 +262,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         # get the closest year in agent_val
                         propensity_year = agent_val.year.unique()[np.abs(agent_val.year.unique() - year).argmin()]
                         
+                        logger.info('\t\tUsing Propensity model with fits from year {}'.format(propensity_year))
                         # Calculate diffusion at the group level based on bass diffusion
                         #aggregate solar agents to group level
                         market_cols = ['sector_abbr', 'developable_agent_weight', 'max_market_share', 'market_share_last_year', 'market_value_last_year',
