@@ -163,7 +163,7 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
        
     agent_group = pd.merge(agent_group, df[['agent_id','pgid','year','sector_abbr','number_of_adopters','customers_in_bin_initial','pct_of_bldgs_developable']], on='pgid')
     agent_group = agent_group[['group','agent_id','pgid','state_abbr','county_id','year','sector_abbr','number_of_adopters','customers_in_bin_initial','pct_of_bldgs_developable']]
-    #agent_group = agent_group[['pgid','year','sector_abbr','number_of_adopters','developable_customers_in_bin','max_market']]
+
     return agent_group
 
 ####****---- END OF FUNCTION market_grouper ----****####
@@ -173,32 +173,32 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
 
 #fit model to the distribution of counts within each group
 def lasso_disagg(df_grouped, county_attr, a=1000, verbose=False):
-    counts = df_grouped[['group','pgid','state_abbr','county_id','year','sector_abbr','number_of_adopters']].copy()
-    counts = counts.set_index('pgid')
+    counts = df_grouped[['group','agent_id','state_abbr','county_id','year','sector_abbr','number_of_adopters']].copy()
+    counts = counts.set_index('agent_id')
     counts['total'] = counts.groupby(['group','year','sector_abbr'], sort=False).number_of_adopters.transform('sum')
     counts['prop'] = np.clip(counts['number_of_adopters'] / np.maximum(counts['total'],0.001), 0, 1)
     counts = counts.sort_values(by="year")
     counts.reset_index(level=0, inplace=True)
 
     # merge in historical non-economic attributes
-    data = counts.merge(county_attr, on=['county_id','year']) #'state_abbr'
+    data = counts.merge(county_attr, on=['state_abbr','county_id','year'])
     data = data.sort_values(by="year")
     data.drop(columns=['state_abbr','county_id'], inplace=True)
 
-    county_val = pd.DataFrame(columns=['pgid','group','sector_abbr','year','number_of_adopters','pred_prop'])
+    county_val = pd.DataFrame(columns=['agent_id','group','sector_abbr','year','number_of_adopters','pred_prop'])
     coeff = []
     for group in list(set(data.group.unique()) - set([0,'-----'])):
         
-        pred = data.query("group==@group")[['pgid','fips_code','group','sector_abbr','year','number_of_adopters']]
+        pred = data.query("group==@group")[['agent_id','fips_code','group','sector_abbr','year','number_of_adopters']]
         
-        if pred.pgid.nunique()==1:            
+        if pred.agent_id.nunique()==1:            
             print("\nOnly one agent in group", group)
             pred['pred_prop'] = 1
             county_val = county_val.append(pred)
             continue
         elif pred.fips_code.nunique()==1:
             print("\nOnly one county in group", group)
-            pred['pred_prop'] = 1 / pred.pgid.nunique()
+            pred['pred_prop'] = 1 / pred.agent_id.nunique()
             county_val = county_val.append(pred)
             continue
         else:
@@ -206,11 +206,11 @@ def lasso_disagg(df_grouped, county_attr, a=1000, verbose=False):
             
             # Training data. Identifier variable should be excluded
             X_train = data.query("group==@group & year<year.max()").drop(
-                            columns=['pgid','fips_code','group','sector_abbr','year','prop','number_of_adopters','total'])
+                            columns=['agent_id','fips_code','group','sector_abbr','year','prop','number_of_adopters','total'])
             
             pred.drop(columns='fips_code', inplace=True)
             X_pred = data.query("group==@group").drop(
-                            columns=['pgid','fips_code','group','sector_abbr','year','prop','number_of_adopters','total'])
+                            columns=['agent_id','fips_code','group','sector_abbr','year','prop','number_of_adopters','total'])
         
         lasso = Lasso(alpha=a)
         lasso.fit(X_train, -np.log(1/(Y_train+1e-40) - 1)) #logit
@@ -223,7 +223,7 @@ def lasso_disagg(df_grouped, county_attr, a=1000, verbose=False):
             print("number of features used:", np.sum(lasso.coef_!=0))
             
             Y_test = data.query("group==@group & year==year.max()")['prop']
-            X_test = data.query("group==@group & year==year.max()").drop(columns=['pgid','group','sector_abbr','year','prop','number_of_adopters','total'])
+            X_test = data.query("group==@group & year==year.max()").drop(columns=['agent_id','group','sector_abbr','year','prop','number_of_adopters','total'])
             
             print("training score for alpha={0}: {1}".format(a, lasso.score(X_train,-np.log(1/(Y_train+1e-40) - 1))))
             print("test score for alpha={0}: {1}".format(a, lasso.score(X_test,-np.log(1/(Y_test+1e-40) - 1))))
@@ -231,13 +231,12 @@ def lasso_disagg(df_grouped, county_attr, a=1000, verbose=False):
         county_val = county_val.append(pred)
     
     # for the "0" group, the proportion for all agents should be 0
-    pred = data.query("group in [0,'-----']")[['pgid','group','sector_abbr','year','number_of_adopters']]
+    pred = data.query("group in [0,'-----']")[['agent_id','group','sector_abbr','year','number_of_adopters']]
     pred['pred_prop'] = 0
     county_val = county_val.append(pred)
-    county_val = county_val.merge(counts[['pgid','county_id','state_abbr']].drop_duplicates(), on='pgid')
-    county_val = county_val.merge(df_grouped[['agent_id','pgid']].drop_duplicates(), on='pgid')
+    county_val = county_val.merge(counts[['agent_id','county_id','state_abbr']].drop_duplicates(), on='agent_id')
 
-    coeff = pd.DataFrame(data=coeff, columns=data.drop(columns=['pgid','group','sector_abbr','year','prop','number_of_adopters','total']).columns)
+    coeff = pd.DataFrame(data=coeff, columns=data.drop(columns=['agent_id','fips_code','group','sector_abbr','year','prop','number_of_adopters','total']).columns)
 
     return (county_val, coeff)
 
