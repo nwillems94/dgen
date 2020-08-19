@@ -304,6 +304,12 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         solar_agents.df = solar_agents.df.join(solar_groups[[*(set(solar_groups.columns) - set(solar_agents.df.columns))]])
                         solar_agents.df.reset_index(inplace=True)
 
+                        # make sure this year >= last year
+                        if is_first_year == False:
+                            for key, value in last_year_dict.items():
+                                solar_agents.df[key].where(solar_agents.df[key] > solar_agents.df[value], 
+                                                           solar_agents.df[value], inplace=True)
+
                         # update the "new" fields to match the agent level change from last year
                         for key, value in new_vals_dict.items():
                             solar_agents.df[value] = solar_agents.df[key] - solar_agents.df[last_year_dict[key]]
