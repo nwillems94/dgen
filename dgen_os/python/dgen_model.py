@@ -122,7 +122,8 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                                            kmeans_vars=['OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE','CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE','FIND_DIV_1000','ESTMTD_HOME_VAL_DIV_1000','PPI_DIV_1000'], verbose=True)
                     # calibrate Bass parameters at the market level
                     bass_params = calib.calibrate_Bass(agent_groups)
-                    bass_params = pd.merge(agent_groups[['group','pgid','sector_abbr']].drop_duplicates(), bass_params, how='left', on=['group','sector_abbr'])
+                    bass_params = pd.merge(agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(), bass_params, how='left', on=['group','sector_abbr'])
+                    bass_params.to_csv(out_dir + '/calibrated_Bass.csv', index=False)
                     
                     if model_settings.propensity_model == True:                 
                         agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'), a=2000)
@@ -289,7 +290,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         solar_groups['agent_id'] = solar_groups['group']
                         
                         solar_groups, _ = diffusion_functions_elec.calc_diffusion_solar(solar_groups, is_first_year,
-                                                                                        bass_params.drop(columns="pgid").drop_duplicates(), year,
+                                                                                        bass_params.drop(columns="agent_id").drop_duplicates(), year,
                                                                                         id_var="group", no_constraint=True)
                         
                         # Disaggregate to agent level based on noneconomic factors
@@ -323,7 +324,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                     else:
                         # Calculate diffusion based on economics and bass diffusion
                         if model_settings.realtime_calibration == True:
-                            solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year, id_var="pgid")
+                            solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year, id_var='agent_id')
                         else:
                             solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year)
 

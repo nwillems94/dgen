@@ -49,45 +49,51 @@ def calibrate_Bass(df_grouped):
 # define groups based on the data in agent_attr
 def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=[], exclude_zeros=True, verbose=False):
     
-    state_capacity_total = (df[['state_abbr', 'sector_abbr', 'pgid', 'developable_roof_sqft']].groupby(['state_abbr', 'sector_abbr'])
-                                                                        .agg({'developable_roof_sqft':'sum', 'pgid':'count'})
-                                                                        .rename(columns={'developable_roof_sqft':'state_developable_roof_sqft', 'pgid':'agent_count'})
+    # calculate scale factors by county
+    county_capacity_total = (df[['state_abbr', 'county_id', 'sector_abbr', 'agent_id', 'developable_roof_sqft']].groupby(['state_abbr', 'county_id', 'sector_abbr'])
+                                                                        .agg({'developable_roof_sqft':'sum', 'agent_id':'count'})
+                                                                        .rename(columns={'developable_roof_sqft':'county_developable_roof_sqft', 'agent_id':'agent_count'})
                                                                         .reset_index())
     
     # coerce dtypes
-    state_capacity_total.state_developable_roof_sqft = state_capacity_total.state_developable_roof_sqft.astype(np.float64) 
+    county_capacity_total.county_developable_roof_sqft = county_capacity_total.county_developable_roof_sqft.astype(np.float64) 
     df.developable_roof_sqft = df.developable_roof_sqft.astype(np.float64)
     df.pct_of_bldgs_developable = df.pct_of_bldgs_developable.astype(np.float64)
     
-    # merge state totals back to agent df
-    df = pd.merge(df, state_capacity_total, how = 'left', on = ['state_abbr', 'sector_abbr'])
+    # merge county totals back to agent df
+    df = pd.merge(df, county_capacity_total, how = 'left', on = ['state_abbr', 'county_id','sector_abbr'])
     
     ## Bring in market data for calibration    
-    historical_state_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_STATE)
-    #historical_county_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_COUNTY)
+    historical_county_capacity_df = pd.read_csv(config.OBSERVED_DEPLOYMENT_BY_COUNTY)[['state_abbr','county_id','sector_abbr','year','imputed_cum_size_kW']]
+    historical_county_capacity_df = (historical_county_capacity_df
+                                    .groupby(['state_abbr','county_id','sector_abbr','year'])
+                                    .sum().rename(columns={'imputed_cum_size_kW':'observed_capacity_kw'})
+                                    .reset_index().query("year in [2014,2016,2018]"))
+    historical_county_capacity_df.sector_abbr.replace('commercial', 'com', inplace=True)
+    
+    ### ??? COPY COMMERICAL VALUES TO INDUSTRIAL AS PLACE HOLDER
+    historical_county_capacity_df = historical_county_capacity_df.append(historical_county_capacity_df
+                                                                         .query("sector_abbr=='com'")
+                                                                         .assign(sector_abbr='ind'),
+                                                                         ignore_index=True)
     
     # join historical data to agent df
-    df = pd.merge(df, historical_state_capacity_df, how='left', on=['state_abbr', 'sector_abbr'])
+    df = pd.merge(df, historical_county_capacity_df, how='left', on=['state_abbr', 'county_id', 'sector_abbr'])
     
     # calculate scale factor - weight that is given to each agent based on proportion of state total
     # where state cumulative capacity is 0, proportion evenly to all agents
-    df['scale_factor'] =  np.where(df['state_developable_roof_sqft'] == 0, 1.0/df['agent_count'], df['developable_roof_sqft'] / df['state_developable_roof_sqft'])
+    df['scale_factor'] =  np.where(df['county_developable_roof_sqft'] == 0, 1.0/df['agent_count'], df['developable_roof_sqft'] / df['county_developable_roof_sqft'])
     
     # use scale factor to constrain agent capacity values to historical values
-    df['system_kw_cum'] = df['scale_factor'] * df['observed_capacity_mw'] * 1000.
+    df['system_kw_cum'] = df['scale_factor'] * df['observed_capacity_kw']
     
     # recalculate number of adopters using anecdotal values
     df['number_of_adopters'] = np.where(df['sector_abbr'] == 'res', df['system_kw_cum']/5.0, df['system_kw_cum']/100.0)
-
-    # recalculate market share
-    #df['market_share'] = np.where(df['developable_agent_weight'] == 0, 0.0, 
-     #                  df['number_of_adopters'] / df['developable_agent_weight'])
-    #df['market_share'] = df['market_share'].astype(np.float64)
     
-    df.drop(columns=['agent_count', 'state_developable_roof_sqft', 'state', 'observed_capacity_mw', 'scale_factor'], inplace=True)
+    df.drop(columns=['agent_count', 'county_developable_roof_sqft', 'observed_capacity_kw', 'scale_factor'], inplace=True)
 
     #use the first year, residential as the grouping data (if they exist)
-    agent_group = pd.merge(agent_attr, df[['county_id','pgid']].drop_duplicates(), how='inner', on='county_id')
+    agent_group = pd.merge(agent_attr, df[['county_id','agent_id']].drop_duplicates(), how='inner', on='county_id')
     if "year" in agent_attr.columns:
         agent_group = agent_group.query("year == year.min()")
     if "sector_abbr" in agent_attr.columns:
@@ -135,15 +141,15 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
         agent_group.sort_values(by=['year'], inplace=True)
         #print(agent_group.head())
 
-        for agentid in agent_group.pgid.unique():
-            phase = agent_group.loc[agent_group["pgid"]==agentid, 'number_of_adopters'].copy().apply(lambda x: 'O' if x == 0 else 'X')
+        for agentid in agent_group.agent_id.unique():
+            phase = agent_group.loc[agent_group['agent_id']==agentid, 'number_of_adopters'].copy().apply(lambda x: 'O' if x == 0 else 'X')
             phase = "".join(phase) #make sure the character length matches the training group names
-            agent_group.loc[agent_group["pgid"]==agentid, 'group'] = phase + "-" + \
-                        agent_group.loc[agent_group["pgid"]==agentid, 'census_division']
+            agent_group.loc[agent_group['agent_id']==agentid, 'group'] = phase + "-" + \
+                        agent_group.loc[agent_group['agent_id']==agentid, 'census_division']
 
             #distinguish between pre and post adoption counties
-            if sum(agent_group.query("pgid==@agentid & year<2018")['number_of_adopters'])==0:
-                agent_group.loc[agent_group["pgid"]==agentid, 'group'] = '-'*3
+            if sum(agent_group.query("agent_id==@agentid & year<2018")['number_of_adopters'])==0:
+                agent_group.loc[agent_group['agent_id']==agentid, 'group'] = '-'*3
             
         #print(agent_group.head())
         if "year" in agent_attr.columns:
@@ -151,17 +157,13 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
         else:
             agent_group.query("year==year.min()", inplace=True)
 
-    
     groups = pd.value_counts(agent_group.loc[:,"group"])
-    #agent_group = agent_group.loc[:,["county_id","state_abbr","group"]]
-    #agent_group = agent_group.loc[:,["pgid","group"]]
-    
     
     if verbose==True:
         print("The smallest group has", groups.min(), "members")
         print(groups)
        
-    agent_group = pd.merge(agent_group, df[['agent_id','pgid','year','sector_abbr','number_of_adopters','customers_in_bin_initial','pct_of_bldgs_developable']], on='pgid')
+    agent_group = pd.merge(agent_group, df[['agent_id','pgid','year','sector_abbr','number_of_adopters','customers_in_bin_initial','pct_of_bldgs_developable']], on='agent_id')
     agent_group = agent_group[['group','agent_id','pgid','state_abbr','county_id','year','sector_abbr','number_of_adopters','customers_in_bin_initial','pct_of_bldgs_developable']]
 
     return agent_group
