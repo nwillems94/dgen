@@ -120,7 +120,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                 if model_settings.realtime_calibration == True:
                     calibration_time = time.time()
                     # group agents together into larger markets
-                    agent_groups = calib.market_grouper(refUSA, solar_agents.df.reset_index(), "kmeans",\
+                    agent_groups = calib.market_grouper2(refUSA, solar_agents.df.reset_index(), "kmeans",\
                                            kmeans_vars=['OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE','CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE','FIND_DIV_1000','ESTMTD_HOME_VAL_DIV_1000','PPI_DIV_1000'], verbose=True)
                     # calibrate Bass parameters at the market level
                     bass_params = calib.calibrate_Bass(agent_groups)
