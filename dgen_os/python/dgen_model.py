@@ -262,56 +262,22 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                                         'system_kw', 'system_capex_per_kw', 'adopters_cum_last_year', 'system_kw_cum_last_year', 
                                         'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year', 'initial_batt_kw', 'initial_batt_kwh',
                                         'initial_pv_kw', 'initial_number_of_adopters', 'initial_market_share', 'initial_market_value']
-                        last_year_dict = {'market_share':'market_share_last_year',
-                                          'max_market_share':'max_market_share_last_year',
-                                          'number_of_adopters':'adopters_cum_last_year',
-                                          'market_value': 'market_value_last_year',
-                                          'system_kw_cum':'system_kw_cum_last_year',
-                                          'batt_kw_cum':'batt_kw_cum_last_year',
-                                          'batt_kwh_cum':'batt_kwh_cum_last_year'}
-                        new_vals_dict = {'number_of_adopters':'new_adopters',
-                                         'batt_kw_cum':'new_batt_kw', 'batt_kwh_cum':'new_batt_kwh',
-                                         'market_share':'new_market_share','market_value':'new_market_value',
-                                         'system_kw_cum':'new_system_kw'}
+
                         solar_groups = pd.merge(solar_agents.df[['pgid']+market_cols], agent_groups[['group','pgid','sector_abbr']].drop_duplicates(), on=["pgid","sector_abbr"])
                         solar_groups.developable_agent_weight  = solar_groups.developable_agent_weight.astype(np.float64)
                         solar_groups.system_capex_per_kw  = solar_groups.system_capex_per_kw.astype(np.float64)
                         
                         solar_groups = solar_groups.groupby(["group","sector_abbr"], as_index=False).sum()
-                        ##??? use "group" as "agent_id", to keep compatibility of aggreagtion functions
+                        ##??? temporarily use "group" as "agent_id", to keep compatibility of aggreagtion functions
                         solar_groups['agent_id'] = solar_groups['group']
                         
                         solar_groups, _ = diffusion_functions_elec.calc_diffusion_solar(solar_groups, is_first_year,
                                                                                         bass_params.drop(columns="agent_id").drop_duplicates(), year,
                                                                                         id_var="group", no_constraint=True)
-                        
-                        # Disaggregate to agent level based on noneconomic factors
-                        # drop the group agent_id's and get the original agent_id's back
-                        solar_groups = pd.merge(solar_groups.drop(columns='agent_id'), agent_val.drop(columns="number_of_adopters").query("year==@propensity_year"), on=['group','sector_abbr'], how="left")
-                        solar_groups.sort_values(by=["agent_id","year"], inplace=True)
-                        solar_groups.set_index('agent_id', inplace=True)
-                        
-                        # dissaggregate according to the predicted proportions
-                        solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['pred_prop'], axis="index")
-                        
-                        solar_groups.drop(columns=['index','group','pred_prop'], inplace=True)
-                        solar_agents.df = solar_agents.df.join(solar_groups[[*(set(solar_groups.columns) - set(solar_agents.df.columns))]])
-                        solar_agents.df.reset_index(inplace=True)
-
-                        # make sure this year >= last year
-                        if is_first_year == False:
-                            for key, value in last_year_dict.items():
-                                solar_agents.df[key].where(solar_agents.df[key] > solar_agents.df[value], 
-                                                           solar_agents.df[value], inplace=True)
-
-                        # update the "new" fields to match the agent level change from last year
-                        for key, value in new_vals_dict.items():
-                            solar_agents.df[value] = solar_agents.df[key] - solar_agents.df[last_year_dict[key]]
-
-                        market_last_year_df = solar_agents.df.copy()[['agent_id','initial_number_of_adopters', 'initial_pv_kw', 'initial_batt_kw','initial_batt_kwh',
-                                                                      'initial_market_share', 'initial_market_value', 'new_system_kw', 
-                                                                      *last_year_dict.keys()]]
-                        market_last_year_df.rename(columns=last_year_dict, inplace=True)
+                        solar_agents.df, market_last_year_df = \
+                            diffusion_functions_elec.propsensity_model(solar_agents.df.copy(), solar_groups,
+                                                                       agent_val.drop(columns="number_of_adopters").query("year==@propensity_year"),
+                                                                       is_first_year)
                                                
                     else:
                         # Calculate diffusion based on economics and bass diffusion
