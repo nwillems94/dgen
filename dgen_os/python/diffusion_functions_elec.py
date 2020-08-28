@@ -311,3 +311,59 @@ def calc_equiv_time(df):
     
 #=============================================================================
 
+#=============================================================================
+def propsensity_model(df, solar_groups, agent_val, is_first_year):
+    """
+    Calculate the "equivalent time" on the diffusion curve. This defines the
+    gradient of adoption.
+
+        IN: msly - numpy array - market share last year [at end of the previous solve] as decimal
+            mms - numpy array - maximum market share as decimal
+            p,q - numpy arrays - Bass diffusion parameters
+            
+        OUT: t_eq - numpy array - Equivalent number of years after diffusion 
+                                  started on the diffusion curve
+    """
+    last_year_dict = {'market_share':'market_share_last_year',
+                      'max_market_share':'max_market_share_last_year',
+                      'number_of_adopters':'adopters_cum_last_year',
+                      'market_value': 'market_value_last_year',
+                      'system_kw_cum':'system_kw_cum_last_year',
+                      'batt_kw_cum':'batt_kw_cum_last_year',
+                      'batt_kwh_cum':'batt_kwh_cum_last_year'}
+    new_vals_dict = {'number_of_adopters':'new_adopters',
+                     'batt_kw_cum':'new_batt_kw', 'batt_kwh_cum':'new_batt_kwh',
+                     'market_share':'new_market_share','market_value':'new_market_value',
+                     'system_kw_cum':'new_system_kw'}
+    
+    # constrain counts at the group level
+    
+    # Disaggregate to agent level based on noneconomic factors
+    # drop the group agent_id's and get the original agent_id's back
+    solar_groups = pd.merge(solar_groups.drop(columns='agent_id'), agent_val, on=['group','sector_abbr'], how="left")
+    solar_groups.sort_values(by=["agent_id","year"], inplace=True)
+    solar_groups.set_index('agent_id', inplace=True)
+    
+    # dissaggregate according to the predicted proportions
+    solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['pred_prop'], axis="index")
+    
+    solar_groups.drop(columns=['index','group','pred_prop'], inplace=True)
+    df = df.join(solar_groups[[*(set(solar_groups.columns) - set(df.columns))]])
+    df.reset_index(inplace=True)
+
+    # make sure this year >= last year
+    if is_first_year == False:
+        for key, value in last_year_dict.items():
+            df[key].where(df[key] > df[value], df[value], inplace=True)
+
+    # update the "new" fields to match the agent level change from last year
+    for key, value in new_vals_dict.items():
+        df[value] = df[key] - df[last_year_dict[key]]
+
+    market_last_year_df = df.copy()[['agent_id','initial_number_of_adopters', 'initial_pv_kw', 
+                                                  'initial_market_share', 'initial_market_value', 'new_system_kw', 
+                                                  *last_year_dict.keys()]]
+    market_last_year_df.rename(columns=last_year_dict, inplace=True)
+    return df, market_last_year_df
+    
+#=============================================================================
