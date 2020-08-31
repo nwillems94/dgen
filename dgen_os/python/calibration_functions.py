@@ -54,7 +54,7 @@ def calibrate_Bass(df_grouped):
 
 # define groups based on the data in agent_attr
 def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=[], exclude_zeros=True, verbose=False):
-    
+
     # calculate scale factors by county
     county_capacity_total = (df[['state_abbr', 'county_id', 'sector_abbr', 'agent_id', 'developable_roof_sqft']].groupby(['state_abbr', 'county_id', 'sector_abbr'])
                                                                         .agg({'developable_roof_sqft':'sum', 'agent_id':'count'})
@@ -74,15 +74,11 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
     historical_county_capacity_df = (historical_county_capacity_df
                                     .groupby(['state_abbr','county_id','sector_abbr','year'])
                                     .sum().rename(columns={'imputed_cum_size_kW':'observed_capacity_kw'})
-                                    .reset_index().query("year in [2014,2016,2018]"))
+                                    .reset_index())#.query("year in [2014,2016,2018]"))
     historical_county_capacity_df.sector_abbr.replace('commercial', 'com', inplace=True)
-    
-    ### ??? COPY COMMERICAL VALUES TO INDUSTRIAL AS PLACE HOLDER
-    historical_county_capacity_df = historical_county_capacity_df.append(historical_county_capacity_df
-                                                                         .query("sector_abbr=='com'")
-                                                                         .assign(sector_abbr='ind'),
-                                                                         ignore_index=True)
-    
+
+    historical_county_capacity_df = historical_county_capacity_df.query("sector_abbr in @df.sector_abbr.unique() & year in [2014,2016,2018]")
+
     # join historical data to agent df
     df = pd.merge(df, historical_county_capacity_df, how='left', on=['state_abbr', 'county_id', 'sector_abbr'])
     
@@ -102,8 +98,6 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
     agent_group = pd.merge(agent_attr, df[['county_id','agent_id']].drop_duplicates(), how='inner', on='county_id')
     if "year" in agent_attr.columns:
         agent_group = agent_group.query("year == year.min()")
-    if "sector_abbr" in agent_attr.columns:
-        agent_group = agent_group.query("sector_abbr=='res'")
     
     agent_group_zero = pd.DataFrame()
     if exclude_zeros==True:
