@@ -351,7 +351,9 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
                      'market_share':'new_market_share','market_value':'new_market_value',
                      'system_kw_cum':'new_system_kw'}
 
-    solar_groups = pd.merge(df[market_cols].reset_index(), agent_groups, on=['agent_id','sector_abbr'])
+    solar_groups = pd.merge(df[market_cols].reset_index(),
+                            agent_groups.drop(columns=['state_abbr','county_id']),
+                            on=['agent_id','sector_abbr'])
     solar_groups.developable_agent_weight  = solar_groups.developable_agent_weight.astype(np.float64)
     solar_groups.system_capex_per_kw  = solar_groups.system_capex_per_kw.astype(np.float64)
     
@@ -362,9 +364,32 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
     solar_groups, _ = calc_diffusion_solar(solar_groups, is_first_year, bass_params,
                                            year, id_var="group", no_constraint=True)
     
+    # constrain to historical values
+    if year in (2014, 2016, 2018):
+        scaled_cols = ['system_kw_cum', 'number_of_adopters', 'batt_kw_cum', 'batt_kwh_cum',
+                       'new_adopt_fraction', 'bass_market_share', 'market_share']
+        historical_county_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_COUNTY)[['state_abbr','county_id','sector_abbr','year','imputed_cum_size_kW']]
+        # merge group information
+        historical_county_capacity_df = pd.merge(historical_county_capacity_df,
+                                                 agent_groups.drop(columns='agent_id'),
+                                                 on=['state_abbr','county_id','sector_abbr'])
+        historical_group_capacity_df = (historical_county_capacity_df.query("year == @year").drop(columns='year')
+                                        .groupby(['group', 'sector_abbr'])
+                                        .sum().rename(columns={'imputed_cum_size_kW':'observed_capacity_kw'})
+                                        .reset_index())
+        # merge solar_groups, historical_group capacity
+        solar_groups = pd.merge(solar_groups, historical_group_capacity_df, on=['group','sector_abbr'])
+        solar_groups['scale_factor'] = solar_groups['observed_capacity_kw'] / solar_groups['system_kw_cum']
+        
+        solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['scale_factor'], axis="index")
+        solar_groups[scaled_cols] = solar_groups[scaled_cols].multiply(solar_groups['scale_factor'], axis="index")
+        solar_groups.drop(columns='scale_factor', inplace=True)
+        
+
     ## DISAGGREGATE TO AGENT LEVEL BASED ON NONECONOMIC FACTORS
     # drop the group agent_id's and get the original agent_id's back
-    solar_groups = pd.merge(solar_groups.drop(columns='agent_id'), agent_val, on=['group','sector_abbr'], how="left")
+    solar_groups = pd.merge(solar_groups.drop(columns='agent_id'), agent_val,
+                            on=['group','sector_abbr'], how="left")
     solar_groups.sort_values(by=['agent_id','year'], inplace=True)
     solar_groups.set_index('agent_id', inplace=True)
     
