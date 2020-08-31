@@ -254,7 +254,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         solar_agents.df, market_last_year_df = \
                             diffusion_functions_elec.propsensity_model(solar_agents.df.copy(),
                                                                         bass_params.drop(columns="agent_id").drop_duplicates(),
-                                                                        agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(),
+                                                                        agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates(),
                                                                         agent_val.drop(columns="number_of_adopters").query("year==@propensity_year"),
                                                                         year, is_first_year)
 
