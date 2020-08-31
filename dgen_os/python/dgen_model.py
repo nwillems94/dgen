@@ -262,30 +262,14 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         ##??? WILL NEED SOMETHING BETTER HERE FOR PREDICTION YEARS ###
                         # get the closest year in agent_val
                         propensity_year = agent_val.year.unique()[np.abs(agent_val.year.unique() - year).argmin()]
-                        
                         logger.info('\t\tUsing Propensity model with fits from year {}'.format(propensity_year))
-                        # Calculate diffusion at the group level based on bass diffusion
-                        #aggregate solar agents to group level
-                        market_cols = ['sector_abbr', 'developable_agent_weight', 'max_market_share', 'market_share_last_year', 'market_value_last_year',
-                                        'system_kw', 'system_capex_per_kw', 'adopters_cum_last_year', 'system_kw_cum_last_year', 
-                                        'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year', 'initial_batt_kw', 'initial_batt_kwh',
-                                        'initial_pv_kw', 'initial_number_of_adopters', 'initial_market_share', 'initial_market_value']
-
-                        solar_groups = pd.merge(solar_agents.df[['pgid']+market_cols], agent_groups[['group','pgid','sector_abbr']].drop_duplicates(), on=["pgid","sector_abbr"])
-                        solar_groups.developable_agent_weight  = solar_groups.developable_agent_weight.astype(np.float64)
-                        solar_groups.system_capex_per_kw  = solar_groups.system_capex_per_kw.astype(np.float64)
-                        
-                        solar_groups = solar_groups.groupby(["group","sector_abbr"], as_index=False).sum()
-                        ##??? temporarily use "group" as "agent_id", to keep compatibility of aggreagtion functions
-                        solar_groups['agent_id'] = solar_groups['group']
-                        
-                        solar_groups, _ = diffusion_functions_elec.calc_diffusion_solar(solar_groups, is_first_year,
-                                                                                        bass_params.drop(columns="agent_id").drop_duplicates(), year,
-                                                                                        id_var="group", no_constraint=True)
                         solar_agents.df, market_last_year_df = \
-                            diffusion_functions_elec.propsensity_model(solar_agents.df.copy(), solar_groups,
-                                                                       agent_val.drop(columns="number_of_adopters").query("year==@propensity_year"),
-                                                                       is_first_year)
+                            diffusion_functions_elec.propsensity_model(solar_agents.df.copy(),
+                                                                        bass_params.drop(columns="agent_id").drop_duplicates(),
+                                                                        agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(),
+                                                                        agent_val.drop(columns="number_of_adopters").query("year==@propensity_year"),
+                                                                        year, is_first_year)
+
                                                
                     else:
                         # Calculate diffusion based on economics and bass diffusion
