@@ -122,14 +122,18 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                                            kmeans_vars=['OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE','CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE','FIND_DIV_1000','ESTMTD_HOME_VAL_DIV_1000','PPI_DIV_1000'], verbose=True)
                     # calibrate Bass parameters at the market level
                     bass_params = calib.calibrate_Bass(agent_groups)
-                    bass_params = pd.merge(agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(), bass_params, how='left', on=['group','sector_abbr'])
-                    bass_params.to_csv(out_dir + '/calibrated_Bass.csv', index=False)
+                    bass_params = pd.merge(agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(),
+                                           bass_params, how='left', on=['group','sector_abbr'])
                     
                     if model_settings.propensity_model == True:                 
                         agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'), a=2000)
                         agent_val.group = agent_val.group.astype(np.int64)
                         propensities.to_csv(out_dir + '/propensities.csv', index=False)
+                        
+                        bass_params = bass_params.drop(columns="agent_id").drop_duplicates()
+                        agent_groups = agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates()
                     
+                    bass_params.to_csv(out_dir + '/calibrated_Bass.csv', index=False)
                     logger.info('\t\tCalibration of Bass parameters complete in {}'.format(time.time()-calibration_time))
 
             #==============================================================================
@@ -265,8 +269,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         logger.info('\t\tUsing Propensity model with fits from year {}'.format(propensity_year))
                         solar_agents.df, market_last_year_df = \
                             diffusion_functions_elec.propsensity_model(solar_agents.df.copy(),
-                                                                        bass_params.drop(columns="agent_id").drop_duplicates(),
-                                                                        agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates(),
+                                                                        bass_params, agent_groups,
                                                                         agent_val.drop(columns="number_of_adopters").query("year==@propensity_year"),
                                                                         year, is_first_year)
 
