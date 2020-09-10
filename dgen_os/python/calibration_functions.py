@@ -56,15 +56,15 @@ def calibrate_Bass(df_grouped):
 def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=[], exclude_zeros=True, verbose=False):
 
     # calculate scale factors by county
-    county_capacity_total = (df[['state_abbr', 'county_id', 'sector_abbr', 'agent_id', 'developable_roof_sqft']].groupby(['state_abbr', 'county_id', 'sector_abbr'])
-                                                                        .agg({'developable_roof_sqft':'sum', 'agent_id':'count'})
-                                                                        .rename(columns={'developable_roof_sqft':'county_developable_roof_sqft', 'agent_id':'agent_count'})
-                                                                        .reset_index())
+    county_capacity_total = (df[['state_abbr', 'county_id', 'sector_abbr', 'agent_id', 'developable_roof_sqft']]
+                             .groupby(['state_abbr', 'county_id', 'sector_abbr'])
+                             .agg({'developable_roof_sqft':'sum', 'agent_id':'count'})
+                             .rename(columns={'developable_roof_sqft':'county_developable_roof_sqft', 'agent_id':'agent_count'})
+                             .reset_index())
     
     # coerce dtypes
-    county_capacity_total.county_developable_roof_sqft = county_capacity_total.county_developable_roof_sqft.astype(np.float64) 
-    df.developable_roof_sqft = df.developable_roof_sqft.astype(np.float64)
-    df.pct_of_bldgs_developable = df.pct_of_bldgs_developable.astype(np.float64)
+    county_capacity_total = county_capacity_total.astype({'county_developable_roof_sqft':'float64'})
+    df = df.astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})
     
     # merge county totals back to agent df
     df = pd.merge(df, county_capacity_total, how = 'left', on = ['state_abbr', 'county_id','sector_abbr'])
@@ -95,7 +95,13 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
     df.drop(columns=['agent_count', 'county_developable_roof_sqft', 'observed_capacity_kw', 'scale_factor'], inplace=True)
 
     #use the first year, residential as the grouping data (if they exist)
-    agent_group = pd.merge(agent_attr, df[['county_id','agent_id']].drop_duplicates(), how='inner', on='county_id')
+    df_vars = set(kmeans_vars) - set(agent_attr.columns)
+    if len(df_vars - set(df.columns)) != 0:
+        print('Dropping the following variables which were not found in agent attributes or solar_agents.df')
+        print('\t', df_vars - set(df.columns))
+        kmeans_vars = list(set(kmeans_vars) - (df_vars - set(df.columns)))
+
+    agent_group = pd.merge(agent_attr, df[['county_id','agent_id', *df_vars]].drop_duplicates(), how='inner', on='county_id')
     if "year" in agent_attr.columns:
         agent_group = agent_group.query("year == year.min()")
     
