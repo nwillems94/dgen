@@ -90,10 +90,10 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
             
             if model_settings.realtime_calibration == False:
                 bass_params = datfunc.get_bass_params(con, scenario_settings.schema)
-            #import non-economic agent attributes - /input_data or postgres?
-            ### acs5 = datfun.acs5()
-            acs5 = pd.read_csv('../input_data/non_economic/acs5_processed.csv', index_col=0)
-            refUSA = pd.read_csv('../input_data/non_economic/refUSA_processed.csv', index_col=0)
+            else:
+                #import non-economic agent attributes
+                acs5 = pd.read_csv('../input_data/non_economic/acs5_processed.csv', index_col=0)
+                refUSA = pd.read_csv('../input_data/non_economic/refUSA_processed.csv', index_col=0)
 
             # get settings whether to use pre-generated agent file ('User Defined'- provide pkl file name) or generate new agents
             agent_file_status = scenario_settings.agent_file_status
@@ -116,28 +116,9 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                 # Get set of columns that define agent's immutable attributes
                 cols_base = list(solar_agents.df.columns)
                 
-                # Calculate Bass parameters based on historic adoption
                 if model_settings.realtime_calibration == True:
-                    calibration_time = time.time()
-                    # group agents together into larger markets
-                    agent_groups = calib.market_grouper(refUSA, solar_agents.df.reset_index(), "kmeans",\
-                                           kmeans_vars=['OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE','CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE','FIND_DIV_1000','ESTMTD_HOME_VAL_DIV_1000','PPI_DIV_1000'], verbose=True)
-                    # calibrate Bass parameters at the market level
-                    bass_params = calib.calibrate_Bass(agent_groups)
-                    bass_params = pd.merge(agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(),
-                                           bass_params, how='left', on=['group','sector_abbr'])
-                    
-                    if model_settings.propensity_model == True:                 
-                        agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'), a=2000)
-                        agent_val.group = agent_val.group.astype(np.int64)
-                        propensities.to_csv(out_dir + '/propensities.csv', index=False)
-                        
-                        bass_params = bass_params.drop(columns="agent_id").drop_duplicates()
-                        agent_groups = agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates()
-                    
-                    bass_params.to_csv(out_dir + '/calibrated_Bass.csv', index=False)
-                    logger.info('\t\tCalibration of Bass parameters complete in {}'.format(time.time()-calibration_time))
-
+                    market_data = calib.assemble_market_data(solar_agents.df.reset_index())
+                
             #==============================================================================
             # TECHNOLOGY DEPLOYMENT
             #==============================================================================
@@ -241,7 +222,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
 
                     # determine "developable" population
                     solar_agents.on_frame(agent_mutation.elec.calculate_developable_customers_and_load)
-
+                    
                     # Apply market_last_year
                     if is_first_year == True:
                         state_starting_capacities_df = agent_mutation.elec.get_state_starting_capacities(con, schema)
@@ -249,25 +230,64 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         market_last_year_df = None
                     else:
                         solar_agents.on_frame(agent_mutation.elec.apply_market_last_year, market_last_year_df)
+                    
+                    # Group agents into markets & calculate Bass parameters based on historic adoption
+                    if model_settings.realtime_calibration == True:
+                        calibration_time = time.time()
+                        # add simulated years to market_data
+                        if year > market_data.year.max():
+                            market_data = pd.concat([market_data, market_data_last_year])
 
+                        agent_attr = refUSA.copy()
+                        #??? 'avg_monthly_kwh', 'tariff_dict', 'max_market_share','wholesale_elec_price_dollars_per_kwh', 'payback_period'
+                        grouping_vars = ['avg_monthly_kwh',
+                                         'OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE',
+                                         'CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE',
+                                         'FIND_DIV_1000','ESTMTD_HOME_VAL_DIV_1000','PPI_DIV_1000']
+                        if "year" in agent_attr.columns:
+                            attr_year = agent_attr.year.unique()[np.abs(agent_attr.year.unique() - year).argmin()]
+                            agent_attr = agent_attr.query("year == @attr_year")
+                        else:
+                            attr_year = year
+
+                        # group agents together into larger markets
+                        agent_groups = calib.market_grouper(agent_attr, market_data, attr_year, "kmeans", kmeans_vars=grouping_vars, verbose=True)
+
+                        # calibrate Bass parameters at the market level
+                        bass_params = calib.calibrate_Bass(agent_groups)
+                        bass_params = pd.merge(agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(),
+                                               bass_params, how='left', on=['group','sector_abbr'])
+                        
+                        if model_settings.propensity_model == True:                 
+                            agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'), a=2000)
+                            agent_val = agent_val.astype({'group':'int64'})
+                            
+                            propensities.to_csv(out_dir + '/propensities_' + str(year) + '.csv', index=False)
+                            
+                            bass_params = bass_params.drop(columns="agent_id").drop_duplicates()
+                            agent_groups = agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates()
+                        
+                        bass_params.to_csv(out_dir + '/calibrated_Bass_' + str(year) + '.csv', index=False)
+                        logger.info('\t\tCalibration of Bass parameters complete in {}'.format(time.time()-calibration_time))
+                    
                     if model_settings.propensity_model == True:
                         ##??? WILL NEED SOMETHING BETTER HERE FOR PREDICTION YEARS ###
                         # get the closest year in agent_val
                         propensity_year = agent_val.year.unique()[np.abs(agent_val.year.unique() - year).argmin()]
-                        logger.info('\t\tUsing Propensity model with fits from year {}'.format(propensity_year))
+                        logger.info('\t\tUsing Propensity model with fits from {}'.format(propensity_year))
                         solar_agents.df, market_last_year_df = \
                             diffusion_functions_elec.propsensity_model(solar_agents.df.copy(),
                                                                         bass_params, agent_groups,
                                                                         agent_val.drop(columns="number_of_adopters").query("year==@propensity_year"),
                                                                         year, is_first_year)
-
-                                               
                     else:
                         # Calculate diffusion based on economics and bass diffusion
                         if model_settings.realtime_calibration == True:
                             solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year, id_var='agent_id')
                         else:
                             solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year)
+
+                    market_data_last_year = (solar_agents.df.copy()[market_data.columns]).astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})
 
                     # Estimate total generation
                     solar_agents.on_frame(agent_mutation.elec.estimate_total_generation)
