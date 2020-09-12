@@ -236,7 +236,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         calibration_time = time.time()
 
                         agent_attr = refUSA.copy()
-                        #??? 'avg_monthly_kwh', 'tariff_dict', 'max_market_share','wholesale_elec_price_dollars_per_kwh', 'payback_period'
+                        #??? 'avg_monthly_kwh', 'max_market_share','wholesale_elec_price_dollars_per_kwh', 'payback_period'
                         grouping_vars = ['avg_monthly_kwh',
                                          'OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE',
                                          'CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE',
@@ -248,8 +248,19 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                             attr_year = year
 
                         # group agents together into larger markets
-                        agent_groups = calib.market_grouper(agent_attr, market_data, attr_year, "kmeans", kmeans_vars=grouping_vars, verbose=True)
-
+                        # for historic years use current year, otherwise use previous year
+                        if year > market_data.year.max():
+                            market_data_this_year = pd.merge(solar_agents.df.reset_index(), market_data.query("year==year.max()"),
+                                                             on='agent_id', suffixes=('_df', None))
+                        else:
+                            market_data_this_year = pd.merge(solar_agents.df.reset_index(), market_data.query("year==@year"),
+                                                             on='agent_id', suffixes=('_df', None))
+                        
+                        agent_groups = calib.market_grouper(agent_attr, market_data_this_year,
+                                                            "kmeans", kmeans_vars=grouping_vars, verbose=True)
+                        # combine the groups with historical market data
+                        agent_groups = agent_groups[['group','agent_id']]
+                        agent_groups = agent_groups.merge(market_data, on='agent_id')
                         # calibrate Bass parameters at the market level
                         bass_params = calib.calibrate_Bass(agent_groups)
                         bass_params = pd.merge(agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(),
