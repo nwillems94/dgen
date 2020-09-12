@@ -246,9 +246,6 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                     # Group agents into markets & calculate Bass parameters based on historic adoption
                     if model_settings.realtime_calibration == True:
                         calibration_time = time.time()
-                        # add simulated years to market_data
-                        if year > market_data.year.max():
-                            market_data = pd.concat([market_data, market_data_last_year])
 
                         agent_attr = refUSA.copy()
                         grouping_vars = ['avg_monthly_kwh',
@@ -262,8 +259,19 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                             attr_year = year
 
                         # group agents together into larger markets
-                        agent_groups = calib.market_grouper(agent_attr, market_data, attr_year, "kmeans", kmeans_vars=grouping_vars, verbose=True)
-
+                        # for historic years use current year, otherwise use previous year
+                        if year > market_data.year.max():
+                            market_data_this_year = pd.merge(solar_agents.df.reset_index(), market_data.query("year==year.max()"),
+                                                             on='agent_id', suffixes=('_df', None))
+                        else:
+                            market_data_this_year = pd.merge(solar_agents.df.reset_index(), market_data.query("year==@year"),
+                                                             on='agent_id', suffixes=('_df', None))
+                        
+                        agent_groups = calib.market_grouper(agent_attr, market_data_this_year,
+                                                            "kmeans", kmeans_vars=grouping_vars, verbose=True)
+                        # combine the groups with historical market data
+                        agent_groups = agent_groups[['group','agent_id']]
+                        agent_groups = agent_groups.merge(market_data, on='agent_id')
                         # calibrate Bass parameters at the market level
                         bass_params = calib.calibrate_Bass(agent_groups)
                         bass_params = pd.merge(agent_groups[['group','agent_id','sector_abbr']].drop_duplicates(),
@@ -298,7 +306,10 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         else:
                             solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year)
 
-                    market_data_last_year = (solar_agents.df.copy()[market_data.columns]).astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})
+                    if model_settings.realtime_calibration == True & year > market_data.year.max():
+                        # add simulated years to market_data
+                        market_data = pd.concat([market_data, 
+                                                 (solar_agents.df.copy()[market_data.columns]).astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})])
 
                     # Estimate total generation
                     solar_agents.on_frame(agent_mutation.elec.estimate_total_generation)
