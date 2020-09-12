@@ -18,6 +18,7 @@ def differential_Bass(x, p, q, mms):
 # ==================================================================================================================== #
 
 
+
 # calibrate p & q values for the differential_Bass function
 def calibrate_Bass(df_grouped):
     market = df_grouped.groupby(['group','year','sector_abbr'], as_index=False).agg({'customers_in_bin_initial':'sum', 'number_of_adopters':'sum', 'pct_of_bldgs_developable':'mean'})
@@ -46,8 +47,9 @@ def calibrate_Bass(df_grouped):
 # ==================================================================================================================== #
 
 
-# define groups based on the data in agent_attr
-def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=[], exclude_zeros=True, verbose=False):
+
+# format data for use in market_grouper
+def assemble_market_data(df):
 
     # calculate scale factors by county
     county_capacity_total = (df[['state_abbr', 'county_id', 'sector_abbr', 'agent_id', 'developable_roof_sqft']]
@@ -87,6 +89,16 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
     df['number_of_adopters'] = np.where(df['sector_abbr'] == 'res', df['system_kw_cum']/5.0, df['system_kw_cum']/100.0)
     
     df.drop(columns=['agent_count', 'county_developable_roof_sqft', 'observed_capacity_kw', 'scale_factor'], inplace=True)
+    
+    return df
+
+####****---- END OF FUNCTION assemble_market_data ----****####
+# ==================================================================================================================== #
+
+
+
+# define groups based on the data in agent_attr
+def market_grouper(agent_attr, df, attr_year, grouping_method, nclusters = 20, kmeans_vars=[], exclude_zeros=True, verbose=False):
 
     #use the first year, residential as the grouping data (if they exist)
     df_vars = set(kmeans_vars) - set(agent_attr.columns)
@@ -97,7 +109,7 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
 
     agent_group = pd.merge(agent_attr, df[['county_id','agent_id', *df_vars]].drop_duplicates(), how='inner', on='county_id')
     if "year" in agent_attr.columns:
-        agent_group = agent_group.query("year == year.min()")
+        agent_group = agent_group.query("year == @attr_year")
     
     agent_group_zero = pd.DataFrame()
     if exclude_zeros==True:
