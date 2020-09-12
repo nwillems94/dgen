@@ -238,9 +238,6 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                     # Group agents into markets & calculate Bass parameters based on historic adoption
                     if model_settings.realtime_calibration == True:
                         calibration_time = time.time()
-                        # add simulated years to market_data
-                        if year > market_data.year.max():
-                            market_data = pd.concat([market_data, market_data_last_year])
 
                         agent_attr = refUSA.copy()
                         #??? 'avg_monthly_kwh', 'tariff_dict', 'max_market_share','wholesale_elec_price_dollars_per_kwh', 'payback_period'
@@ -291,7 +288,10 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         else:
                             solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year)
 
-                    market_data_last_year = (solar_agents.df.copy()[market_data.columns]).astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})
+                    if model_settings.realtime_calibration == True & year > market_data.year.max():
+                        # add simulated years to market_data
+                        market_data = pd.concat([market_data, 
+                                                 (solar_agents.df.copy()[market_data.columns]).astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})])
 
                     # Estimate total generation
                     solar_agents.on_frame(agent_mutation.elec.estimate_total_generation)
