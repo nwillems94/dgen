@@ -100,7 +100,7 @@ def assemble_market_data(df):
 
 
 # define groups based on the data in agent_attr
-def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=[], exclude_zeros=True, verbose=False):
+def market_grouper(agent_attr, df, grouping_method, kmeans_vars=[], exclude_zeros=True, verbose=False):
 
     # check to make sure vars exist in dataframes
     df_vars = set(kmeans_vars) - set(agent_attr.columns)
@@ -123,6 +123,7 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
         agent_group = agent_group[~agent_group.county_id.isin(zero_counties)]
     
     ##GROUPING
+    nclusters = np.clip(agent_group.county_id.nunique()//2, 2, 20)
     #group by **MAXIMUM MARKET SHARE**
     if grouping_method == "mms":
         print("Grouping by Maximum Market Share")
@@ -136,7 +137,8 @@ def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=
     
     #group using **K MEANS** clustering
     elif grouping_method == "kmeans":
-        print("Grouping using k means clustering")
+        print("grouping using kmeans clustering with", nclusters, "clusters")
+        
 
         #scale data around mean and to unit variance before clustering
         data = agent_group.loc[:, kmeans_vars]
