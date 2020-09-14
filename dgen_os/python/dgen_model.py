@@ -251,15 +251,14 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         # for historic years use current year, otherwise use previous year
                         if year > market_data.year.max():
                             market_data_this_year = pd.merge(solar_agents.df.reset_index(), market_data.query("year==year.max()"),
-                                                             on='agent_id', suffixes=('_df', None))
+                                                             on='agent_id', suffixes=('_redundant', None))
                         else:
                             market_data_this_year = pd.merge(solar_agents.df.reset_index(), market_data.query("year==@year"),
-                                                             on='agent_id', suffixes=('_df', None))
+                                                             on='agent_id', suffixes=('_redundant', None))
                         
                         agent_groups = calib.market_grouper(agent_attr, market_data_this_year,
                                                             "kmeans", kmeans_vars=grouping_vars, verbose=True)
                         # combine the groups with historical market data
-                        agent_groups = agent_groups[['group','agent_id']]
                         agent_groups = agent_groups.merge(market_data, on='agent_id')
                         # calibrate Bass parameters at the market level
                         bass_params = calib.calibrate_Bass(agent_groups)
@@ -295,9 +294,10 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         else:
                             solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year)
 
-                    if model_settings.realtime_calibration == True & year > market_data.year.max():
-                        # add simulated years to market_data
-                        market_data = pd.concat([market_data, 
+                    if model_settings.realtime_calibration == True:
+                        if year > market_data.year.max():
+                            # add simulated years to market_data
+                            market_data = pd.concat([market_data, 
                                                  (solar_agents.df.copy()[market_data.columns]).astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})])
 
                     # Estimate total generation

@@ -27,8 +27,10 @@ def differential_Bass(x, p, q, mms):
 
 # calibrate p & q values for the differential_Bass function
 def calibrate_Bass(df_grouped):
-    market = df_grouped.groupby(['group','year','sector_abbr'], as_index=False).agg({'customers_in_bin_initial':'sum', 'number_of_adopters':'sum', 'pct_of_bldgs_developable':'mean'})
-    market['f'] = np.clip(market['number_of_adopters'] / market['customers_in_bin_initial'], 0, 1) 
+    df_grouped['max_market_size'] = df_grouped['max_market_share'] * df_grouped['customers_in_bin']
+    market = df_grouped.groupby(['group','year','sector_abbr'], as_index=False).agg({'customers_in_bin':'sum', 'number_of_adopters':'sum','max_market_size':'sum','pct_of_bldgs_developable':'mean'})
+    market['f'] = np.clip(market['number_of_adopters'] / market['customers_in_bin'], 0, 1)
+    market['mms'] = np.clip(market['max_market_size'] / market['customers_in_bin'], 0, 1)
 
     fitted_Bass = []
     for group in market.group.unique():
@@ -36,7 +38,7 @@ def calibrate_Bass(df_grouped):
         for sector in data.sector_abbr.unique():
             xdata = data.query("sector_abbr==@sector & year<year.max()")['f']
             ydata = data.query("sector_abbr==@sector & year>year.min()")['f']
-            mms = data.query("sector_abbr==@sector & year>year.min()")['pct_of_bldgs_developable'].to_numpy()
+            mms = data.query("sector_abbr==@sector & year>year.min()")['mms'].to_numpy()
     
             [p,q], _ = curve_fit(lambda x, p, q: differential_Bass(x, p, q, mms=mms), xdata, ydata, bounds=(1e-5, [0.2, 0.8]))
 
@@ -104,9 +106,9 @@ def assemble_market_data(df):
 
 
 # define groups based on the data in agent_attr
-def market_grouper(agent_attr, df, attr_year, grouping_method, nclusters = 20, kmeans_vars=[], exclude_zeros=True, verbose=False):
+def market_grouper(agent_attr, df, grouping_method, nclusters = 20, kmeans_vars=[], exclude_zeros=True, verbose=False):
 
-    #use the first year, residential as the grouping data (if they exist)
+    # check to make sure vars exist in dataframes
     df_vars = set(kmeans_vars) - set(agent_attr.columns)
     if len(df_vars - set(df.columns)) != 0:
         print('Dropping the following variables which were not found in agent attributes or solar_agents.df')
@@ -114,8 +116,6 @@ def market_grouper(agent_attr, df, attr_year, grouping_method, nclusters = 20, k
         kmeans_vars = list(set(kmeans_vars) - (df_vars - set(df.columns)))
 
     agent_group = pd.merge(agent_attr, df[['county_id','agent_id', *df_vars]].drop_duplicates(), how='inner', on='county_id')
-    if "year" in agent_attr.columns:
-        agent_group = agent_group.query("year == @attr_year")
     
     agent_group_zero = pd.DataFrame()
     if exclude_zeros==True:
@@ -188,9 +188,9 @@ def market_grouper(agent_attr, df, attr_year, grouping_method, nclusters = 20, k
     if verbose==True:
         print("The smallest group has", groups.min(), "members")
         print(groups)
-       
-    agent_group = pd.merge(agent_group, df[['agent_id','pgid','year','sector_abbr','number_of_adopters','customers_in_bin_initial','pct_of_bldgs_developable']], on='agent_id')
-    agent_group = agent_group[['group','agent_id','pgid','state_abbr','county_id','year','sector_abbr','number_of_adopters','customers_in_bin_initial','pct_of_bldgs_developable']]
+    
+    agent_group = pd.merge(agent_group, df, on='agent_id', suffixes=(None, '_redundant'))
+    agent_group = agent_group[['group','agent_id','customers_in_bin','max_market_share']]
 
     return agent_group
 
