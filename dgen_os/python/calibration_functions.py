@@ -33,8 +33,8 @@ def calibrate_Bass(df_grouped):
             xdata = data.query("sector_abbr==@sector & year<year.max()")['f']
             ydata = data.query("sector_abbr==@sector & year>year.min()")['f']
             mms = data.query("sector_abbr==@sector & year>year.min()")['mms'].to_numpy()
-    
-            [p,q], _ = curve_fit(lambda x, p, q: differential_Bass(x, p, q, mms=mms), xdata, ydata, bounds=(1e-5, [0.2, 0.8]))
+
+            [p,q], _ = curve_fit(lambda x, p, q: differential_Bass(x, p, q, mms=mms), xdata, ydata, bounds=([1e-4, 0.2], [2e-3, 0.4]))
 
             fitted_Bass.append([group, sector, p, q])
     
