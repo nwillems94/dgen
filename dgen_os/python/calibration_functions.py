@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Lasso
 
@@ -137,16 +138,32 @@ def market_grouper(agent_attr, df, grouping_method, kmeans_vars=[], exclude_zero
     
     #group using **K MEANS** clustering
     elif grouping_method == "kmeans":
-        print("grouping using kmeans clustering with", nclusters, "clusters")
-        
+        print("grouping using kmeans clustering")
 
         #scale data around mean and to unit variance before clustering
         data = agent_group.loc[:, kmeans_vars]
         scaled = StandardScaler().fit(data)
-        clusters = KMeans(n_clusters=nclusters, random_state=0).fit(scaled.transform(data))
-        agent_group.insert(0, 'group', clusters.labels_+1)
+        X = scaled.transform(data)
+        
+        silhouette_best = -1
+        for n_clusters in range(2, agent_group.county_id.nunique()//2):
+        
+            # Initialize the clusterer with n_clusters value and a random seed
+            clusterer = KMeans(n_clusters=n_clusters, random_state=10)
+            
+            cluster_labels = clusterer.fit_predict(X)
+        
+            # calculate the silhouette score to evaluate this number of clusters
+            silhouette_val = silhouette_score(X, cluster_labels)
+            if silhouette_val > silhouette_best:
+                silhouette_best = silhouette_val
+                n_clusters_best = n_clusters
+                labels_best = cluster_labels
+            
+        print("using", n_clusters_best, "clusters")
+        agent_group.insert(0, 'group', labels_best+1)
         agent_group = agent_group.append(agent_group_zero)
-
+        
     #**MANUAL** grouping method
     elif grouping_method == "manual":
         print("Grouping by Phase of Adoption")
