@@ -368,19 +368,8 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
     if year in (2014, 2016, 2018):
         scaled_cols = ['system_kw_cum', 'number_of_adopters', 'batt_kw_cum', 'batt_kwh_cum',
                        'new_adopt_fraction', 'bass_market_share', 'market_share']
-        historical_county_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_COUNTY)[['state_abbr','county_id','sector_abbr','year','imputed_cum_size_kW']]
-        historical_county_capacity_df.sector_abbr.replace('commercial', 'com', inplace=True)
-        # merge group information
-        historical_county_capacity_df = pd.merge(historical_county_capacity_df,
-                                                 agent_groups.drop(columns='agent_id'),
-                                                 on=['state_abbr','county_id','sector_abbr'])
-        historical_group_capacity_df = (historical_county_capacity_df.query("year == @year").drop(columns='year')
-                                        .groupby(['group', 'sector_abbr'])
-                                        .sum().rename(columns={'imputed_cum_size_kW':'observed_capacity_kw'})
-                                        .reset_index())
-        # merge solar_groups, historical_group capacity
-        solar_groups = pd.merge(solar_groups, historical_group_capacity_df, on=['group','sector_abbr'])
-        solar_groups['scale_factor'] = solar_groups['observed_capacity_kw'] / solar_groups['system_kw_cum']
+        
+        solar_groups['scale_factor'] = solar_groups['historic_kw_cum'] / solar_groups['system_kw_cum']
         
         solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['scale_factor'], axis="index")
         solar_groups[scaled_cols] = solar_groups[scaled_cols].multiply(solar_groups['scale_factor'], axis="index")
