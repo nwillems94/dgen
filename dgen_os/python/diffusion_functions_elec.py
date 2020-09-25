@@ -345,8 +345,8 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
     solar_groups = pd.merge(df[market_cols].reset_index(),
                             agent_groups.drop(columns=['state_abbr','county_id']),
                             on=['agent_id','sector_abbr'])
-    solar_groups.developable_agent_weight  = solar_groups.developable_agent_weight.astype(np.float64)
-    solar_groups.system_capex_per_kw  = solar_groups.system_capex_per_kw.astype(np.float64)
+    solar_groups = solar_groups.astype({'developable_agent_weight':'float64', 'system_capex_per_kw':'float64',
+                                        'batt_kw':'float64', 'batt_kwh':'float64', 'system_kw':'float64'})
     
     solar_groups = solar_groups.groupby(["group","sector_abbr"], as_index=False).sum()
     ##??? temporarily use "group" as "agent_id", to keep compatibility of aggreagtion functions
@@ -354,12 +354,13 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
     
     solar_groups, _ = calc_diffusion_solar(solar_groups, is_first_year, bass_params,
                                            year, id_var="group", no_constraint=True)
-    
+
     # constrain to historical values
     if year in (2014, 2016, 2018):
         scaled_cols = ['system_kw_cum', 'number_of_adopters', 'batt_kw_cum', 'batt_kwh_cum',
                        'new_adopt_fraction', 'bass_market_share', 'market_share']
         historical_county_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_COUNTY)[['state_abbr','county_id','sector_abbr','year','imputed_cum_size_kW']]
+        historical_county_capacity_df.sector_abbr.replace('commercial', 'com', inplace=True)
         # merge group information
         historical_county_capacity_df = pd.merge(historical_county_capacity_df,
                                                  agent_groups.drop(columns='agent_id'),
