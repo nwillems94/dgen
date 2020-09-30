@@ -237,10 +237,11 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
 
                         agent_attr = refUSA.copy()
                         #??? 'avg_monthly_kwh', 'max_market_share','wholesale_elec_price_dollars_per_kwh', 'payback_period'
-                        grouping_vars = ['avg_monthly_kwh',
-                                         'OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE',
-                                         'CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE',
-                                         'FIND_DIV_1000','ESTMTD_HOME_VAL_DIV_1000','PPI_DIV_1000']
+                        grouping_vars = ['avg_elec_price_cents_per_kwh', 'avg_monthly_kwh','pct_of_bldgs_developable', 'WEALTH_FINDER_SCORE', 'PPI_DIV_1000']
+                        #grouping_vars = ['avg_monthly_kwh',
+                         #                'OWNER_RENTER_STATUS','MARITAL_STATUS','LENGTH_OF_RESIDENCE',
+                         #                'CHILDREN_IND','CHILDRENHHCOUNT', 'MAILABILITY_SCORE','WEALTH_FINDER_SCORE',
+                         #                'FIND_DIV_1000','ESTMTD_HOME_VAL_DIV_1000','PPI_DIV_1000']
                         if "year" in agent_attr.columns:
                             attr_year = agent_attr.year.unique()[np.abs(agent_attr.year.unique() - year).argmin()]
                             agent_attr = agent_attr.query("year == @attr_year")
@@ -272,8 +273,12 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                             propensities.to_csv(out_dir + '/propensities_' + str(year) + '.csv', index=False)
                             
                             bass_params = bass_params.drop(columns="agent_id").drop_duplicates()
-                            agent_groups = agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates()
-                        
+                            if year in (2014, 2016, 2018):
+                                agent_groups = agent_groups.query("year==@year")[['state_abbr','county_id','group','agent_id','sector_abbr','system_kw_cum']]
+                                agent_groups.rename(columns={'system_kw_cum':'historic_kw_cum'}, inplace=True)
+                            else:
+                                agent_groups = agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates()
+                                                
                         bass_params.to_csv(out_dir + '/calibrated_Bass_' + str(year) + '.csv', index=False)
                         logger.info('\t\tCalibration of Bass parameters complete in {}'.format(time.time()-calibration_time))
                     
