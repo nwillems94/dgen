@@ -61,19 +61,13 @@ def calibrate_Bass(df_grouped):
 def assemble_market_data(df):
 
     # calculate scale factors by county
-    county_capacity_total = (df[['state_abbr', 'county_id', 'sector_abbr', 'agent_id', 'developable_roof_sqft']]
-                             .groupby(['state_abbr', 'county_id', 'sector_abbr'])
-                             .agg({'developable_roof_sqft':'sum', 'agent_id':'count'})
-                             .rename(columns={'developable_roof_sqft':'county_developable_roof_sqft', 'agent_id':'agent_count'})
-                             .reset_index())
-    
-    # coerce dtypes
-    county_capacity_total = county_capacity_total.astype({'county_developable_roof_sqft':'float64'})
     df = df.astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})
-    
-    # merge county totals back to agent df
-    df = pd.merge(df, county_capacity_total, how = 'left', on = ['state_abbr', 'county_id','sector_abbr'])
-    
+    df['county_developable_roof_sqft'] = df.groupby(['state_abbr', 'county_id', 'sector_abbr']).developable_roof_sqft.transform('sum')
+    df['agent_count'] = df.groupby(['state_abbr', 'county_id', 'sector_abbr']).agent_id.transform('count')
+    # calculate scale factor - weight that is given to each agent based on proportion of county total
+    # where county cumulative capacity is 0, proportion evenly to all agents
+    df['scale_factor'] =  np.where(df['county_developable_roof_sqft'] == 0, 1.0/df['agent_count'], df['developable_roof_sqft'] / df['county_developable_roof_sqft'])
+ 
     ## Bring in market data for calibration    
     historical_county_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_COUNTY)[['state_abbr','county_id','sector_abbr','year','imputed_cum_size_kW']]
     historical_county_capacity_df = (historical_county_capacity_df
@@ -86,10 +80,6 @@ def assemble_market_data(df):
 
     # join historical data to agent df
     df = pd.merge(df, historical_county_capacity_df, how='left', on=['state_abbr', 'county_id', 'sector_abbr'])
-    
-    # calculate scale factor - weight that is given to each agent based on proportion of state total
-    # where state cumulative capacity is 0, proportion evenly to all agents
-    df['scale_factor'] =  np.where(df['county_developable_roof_sqft'] == 0, 1.0/df['agent_count'], df['developable_roof_sqft'] / df['county_developable_roof_sqft'])
     
     # use scale factor to constrain agent capacity values to historical values
     df['system_kw_cum'] = df['scale_factor'] * df['observed_capacity_kw']
