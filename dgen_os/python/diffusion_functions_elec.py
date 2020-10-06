@@ -337,8 +337,9 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
     """
     market_cols = ['sector_abbr', 'developable_agent_weight', 'max_market_share', 'market_share_last_year', 'market_value_last_year',
                    'system_kw', 'system_capex_per_kw', 'adopters_cum_last_year', 'system_kw_cum_last_year', 
-                   'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year', 'initial_batt_kw', 'initial_batt_kwh',
+                   'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year', 'initial_batt_kw', 'initial_batt_kwh', 'customers_in_bin',
                    'initial_pv_kw', 'initial_number_of_adopters', 'initial_market_share', 'initial_market_value']
+    ms_cols = ['max_market_share', 'market_share_last_year','initial_market_share']
     last_year_dict = {'market_share':'market_share_last_year',
                       'max_market_share':'max_market_share_last_year',
                       'number_of_adopters':'adopters_cum_last_year',
@@ -355,24 +356,30 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
                             agent_groups.drop(columns=['state_abbr','county_id']),
                             on=['agent_id','sector_abbr'])
     solar_groups = solar_groups.astype({'developable_agent_weight':'float64', 'system_capex_per_kw':'float64',
-                                        'batt_kw':'float64', 'batt_kwh':'float64', 'system_kw':'float64'})
+                                        'batt_kw':'float64', 'batt_kwh':'float64', 'system_kw':'float64', 'customers_in_bin':'float64'})
     
+    solar_groups[ms_cols] = solar_groups[ms_cols].mul(solar_groups['customers_in_bin'], axis="index")
     solar_groups = solar_groups.groupby(["group","sector_abbr"], as_index=False).sum()
+    solar_groups[ms_cols] = solar_groups[ms_cols].div(solar_groups['customers_in_bin'], axis="index")
+
     ##??? temporarily use "group" as "agent_id", to keep compatibility of aggreagtion functions
     solar_groups['agent_id'] = solar_groups['group']
+    cust_in_bin = solar_groups['customers_in_bin'].astype('float64').copy()
     
-    solar_groups, _ = calc_diffusion_solar(solar_groups, is_first_year, bass_params,
+    solar_groups, _ = calc_diffusion_solar(solar_groups.drop(columns='customers_in_bin'), is_first_year, bass_params,
                                            year, id_var="group", no_constraint=True)
 
     # constrain to historical values
     if year in (2014, 2016, 2018):
-        scaled_cols = ['system_kw_cum', 'number_of_adopters', 'batt_kw_cum', 'batt_kwh_cum',
-                       'new_adopt_fraction', 'bass_market_share', 'market_share']
+        scaled_cols = ['system_kw_cum', 'number_of_adopters', 'batt_kw_cum', 'batt_kwh_cum']
+                       #'new_adopt_fraction', 'bass_market_share', 'market_share']
         
         solar_groups['scale_factor'] = solar_groups['historic_kw_cum'] / solar_groups['system_kw_cum']
         
         solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['scale_factor'], axis="index")
         solar_groups[scaled_cols] = solar_groups[scaled_cols].multiply(solar_groups['scale_factor'], axis="index")
+        solar_groups['market_share'] = solar_groups['number_of_adopters'].div(cust_in_bin, axis="index")
+        
         solar_groups.drop(columns='scale_factor', inplace=True)
         
 
@@ -385,6 +392,8 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
     
     # dissaggregate according to the predicted proportions
     solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['pred_prop'], axis="index")
+    ms_cols.extend(['new_adopt_fraction', 'bass_market_share', 'market_share'])
+    solar_groups[ms_cols] = solar_groups[ms_cols].clip(0,1)
     
     solar_groups.drop(columns=['index','group','pred_prop'], inplace=True)
     df = df.join(solar_groups[[*(set(solar_groups.columns) - set(df.columns))]])
