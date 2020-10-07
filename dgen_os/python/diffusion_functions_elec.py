@@ -314,7 +314,7 @@ def calc_equiv_time(df):
 
 
 #=============================================================================
-def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_year):
+def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
     """
     Calculate the "equivalent time" on the diffusion curve. This defines the
     gradient of adoption.
@@ -344,7 +344,7 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
                      'system_kw_cum':'new_system_kw'}
 
     solar_groups = pd.merge(df[market_cols].reset_index(),
-                            agent_groups.drop(columns=['state_abbr','county_id']),
+                            agent_groups.drop(columns=['state_abbr','county_id','pred_prop']),
                             on=['agent_id','sector_abbr'])
     solar_groups = solar_groups.astype({'developable_agent_weight':'float64', 'system_capex_per_kw':'float64',
                                         'batt_kw':'float64', 'batt_kwh':'float64', 'system_kw':'float64', 'customers_in_bin':'float64'})
@@ -372,13 +372,14 @@ def propsensity_model(df, bass_params, agent_groups, agent_val, year, is_first_y
         solar_groups['market_share'] = solar_groups['number_of_adopters'].div(cust_in_bin, axis="index")
         
         solar_groups.drop(columns='scale_factor', inplace=True)
+        agent_groups.drop(columns='historic_kw_cum', inplace=True)
         
 
     ## DISAGGREGATE TO AGENT LEVEL BASED ON NONECONOMIC FACTORS
     # drop the group agent_id's and get the original agent_id's back
-    solar_groups = pd.merge(solar_groups.drop(columns='agent_id'), agent_val,
+    solar_groups = pd.merge(solar_groups.drop(columns='agent_id'), agent_groups,
                             on=['group','sector_abbr'], how="left")
-    solar_groups.sort_values(by=['agent_id','year'], inplace=True)
+    #solar_groups.sort_values(by=['agent_id','year'], inplace=True)
     solar_groups.set_index('agent_id', inplace=True)
     
     # dissaggregate according to the predicted proportions
