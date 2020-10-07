@@ -276,6 +276,10 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                         if model_settings.propensity_model == True:                 
                             agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'), a=2000)
                             agent_val = agent_val.astype({'group':'int64'})
+
+                            ##??? WILL NEED SOMETHING BETTER HERE FOR PREDICTION YEARS ###
+                            # get the closest year in agent_val
+                            propensity_year = agent_val.year.unique()[np.abs(agent_val.year.unique() - year).argmin()]
                             
                             propensities.to_csv(out_dir + '/propensities_' + str(year) + '.csv', index=False)
                             
@@ -285,19 +289,18 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                                 agent_groups.rename(columns={'system_kw_cum':'historic_kw_cum'}, inplace=True)
                             else:
                                 agent_groups = agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates()
+                            
+                            agent_groups = pd.merge(agent_groups, agent_val.query("year==@propensity_year")[['agent_id','pred_prop']], on='agent_id')
                                                 
                         bass_params.to_csv(out_dir + '/calibrated_Bass_' + str(year) + '.csv', index=False)
                         logger.info('\t\tCalibration of Bass parameters complete in {}'.format(time.time()-calibration_time))
                     
                     if model_settings.propensity_model == True:
-                        ##??? WILL NEED SOMETHING BETTER HERE FOR PREDICTION YEARS ###
-                        # get the closest year in agent_val
-                        propensity_year = agent_val.year.unique()[np.abs(agent_val.year.unique() - year).argmin()]
+
                         logger.info('\t\tUsing Propensity model with fits from {}'.format(propensity_year))
                         solar_agents.df, market_last_year_df = \
                             diffusion_functions_elec.propsensity_model(solar_agents.df.copy(),
                                                                         bass_params, agent_groups,
-                                                                        agent_val.drop(columns="number_of_adopters").query("year==@propensity_year"),
                                                                         year, is_first_year)
                     else:
                         # Calculate diffusion based on economics and bass diffusion
