@@ -183,7 +183,7 @@ def market_grouper(agent_attr, df, grouping_method, kmeans_vars=[], exclude_zero
         print("Grouping by State")
         if exclude_zeros==True:
             agent_group = pd.concat([agent_group, agent_group_zero.drop(columns='group')])
-        agent_group.insert(0, 'group', agent_group["state_abbr"])
+        agent_group.insert(0, 'group', agent_group.state_abbr.factorize()[0] + 1)
     
     groups = pd.value_counts(agent_group.loc[:,"group"])
 
