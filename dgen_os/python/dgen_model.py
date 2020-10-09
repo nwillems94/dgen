@@ -274,8 +274,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                                                bass_params, how='left', on=['group','sector_abbr'])
                         
                         if model_settings.propensity_model == True:                 
-                            agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'), a=2000)
-                            agent_val = agent_val.astype({'group':'int64'})
+                            agent_val, propensities = calib.lasso_disagg(agent_groups, acs5.drop(columns='NAME'))
 
                             ##??? WILL NEED SOMETHING BETTER HERE FOR PREDICTION YEARS ###
                             # get the closest year in agent_val
