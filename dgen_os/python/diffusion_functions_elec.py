@@ -316,16 +316,31 @@ def calc_equiv_time(df):
 #=============================================================================
 def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
     """
-    Calculate the "equivalent time" on the diffusion curve. This defines the
-    gradient of adoption.
+    Use a propensity model to calculate diffusion:
+        - Use Bass diffusion to calculate the total adoption in a group
+        - For each group, disaggregate the total adoption to the individual agents
 
-        IN: msly - numpy array - market share last year [at end of the previous solve] as decimal
-            mms - numpy array - maximum market share as decimal
-            p,q - numpy arrays - Bass diffusion parameters
-            
-        OUT: t_eq - numpy array - Equivalent number of years after diffusion 
-                                  started on the diffusion curve
+    Parameters
+    ----------
+    df : pandas dataframe
+        Main dataframe
+    bass_params : pandas dataframe
+        p,q bass parameters by group
+    agent_groups : pandas dataframe
+        matches group (along with historic adoption, predicted proportion of adoption) to agent_id's
+    year : int
+        current year
+    is_first_year : logical
+        is this the first year of simulation
+
+    Returns
+    -------
+    df pandas dataframe
+        Main dataframe with diffusion variables updated
+    market_last_year pandas dataframe
+        market to inform diffusion in next year
     """
+
     market_cols = ['sector_abbr', 'developable_agent_weight', 'max_market_share', 'market_share_last_year', 'market_value_last_year',
                    'system_kw', 'system_capex_per_kw', 'adopters_cum_last_year', 'system_kw_cum_last_year', 
                    'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year', 'customers_in_bin',
