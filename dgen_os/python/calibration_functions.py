@@ -73,34 +73,33 @@ def assemble_market_data(df):
     historical_county_capacity_df = historical_county_capacity_df.query("sector_abbr in @df.sector_abbr.unique() & year in [2014,2016,2018]")
 
     # join historical data to agent df
-    df = pd.merge(df, historical_county_capacity_df, how='left', on=['state_abbr', 'county_id', 'sector_abbr'])
+    market_data = pd.merge(df, historical_county_capacity_df, how='left', on=['state_abbr', 'county_id', 'sector_abbr'])
     
     # use scale factor to constrain agent capacity values to historical values
-    df['system_kw_cum'] = df['scale_factor'] * df['observed_capacity_kw']
+    market_data['system_kw_cum'] = market_data['scale_factor'] * market_data['observed_capacity_kw']
     
     # recalculate number of adopters using anecdotal values
-    df['number_of_adopters'] = np.where(df['sector_abbr'] == 'res', df['system_kw_cum']/5.0, df['system_kw_cum']/100.0)
+    market_data['number_of_adopters'] = np.where(market_data['sector_abbr'] == 'res', market_data['system_kw_cum']/5.0, market_data['system_kw_cum']/100.0)
     
-    df.drop(columns=['agent_count', 'county_developable_roof_sqft', 'observed_capacity_kw', 'scale_factor'], inplace=True)
+    market_data.drop(columns=['agent_count', 'county_developable_roof_sqft', 'observed_capacity_kw', 'scale_factor'], inplace=True)
     
-    return df
+    return market_data
 
 ####****---- END OF FUNCTION assemble_market_data ----****####
 # ==================================================================================================================== #
 
 
-
 # define groups based on the data in agent_attr
-def market_grouper(agent_attr, df, grouping_method, kmeans_vars=[], exclude_zeros=True, verbose=False):
+def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zeros=True, verbose=False):
 
     # check to make sure vars exist in dataframes
-    df_vars = set(kmeans_vars) - set(agent_attr.columns)
+    df_vars = set(kmeans_vars) - set(county_attr.columns)
     if len(df_vars - set(df.columns)) != 0:
         print('Dropping the following variables which were not found in agent attributes or solar_agents.df')
         print('\t', df_vars - set(df.columns))
         kmeans_vars = list(set(kmeans_vars) - (df_vars - set(df.columns)))
 
-    agent_group = pd.merge(agent_attr, df[['county_id','agent_id', *df_vars]].drop_duplicates(), how='inner', on='county_id')
+    agent_group = pd.merge(county_attr, df[['county_id','agent_id', *df_vars]].drop_duplicates(), how='inner', on='county_id')
     
     agent_group_zero = pd.DataFrame()
     if exclude_zeros==True:
@@ -173,8 +172,8 @@ def market_grouper(agent_attr, df, grouping_method, kmeans_vars=[], exclude_zero
                 agent_group.loc[agent_group['agent_id']==agentid, 'group'] = '-'*5
             
         #print(agent_group.head())
-        if "year" in agent_attr.columns:
-            agent_group = agent_group.loc[agent_group["year"] == agent_attr["year"].min()]
+        if "year" in county_attr.columns:
+            agent_group = agent_group.loc[agent_group["year"] == county_attr["year"].min()]
         else:
             agent_group.query("year==year.min()", inplace=True)
 
@@ -203,7 +202,7 @@ def market_grouper(agent_attr, df, grouping_method, kmeans_vars=[], exclude_zero
 
 
 #fit model to the distribution of counts within each group
-def lasso_disagg(df_grouped, county_attr, a=1000, verbose=False):
+def lasso_disagg(df_grouped, county_attr, a=2000, verbose=False):
     counts = df_grouped[['group','agent_id','state_abbr','county_id','year','sector_abbr','number_of_adopters']].copy()
     counts = counts.set_index('agent_id')
     counts['total'] = counts.groupby(['group','year','sector_abbr'], sort=False).number_of_adopters.transform('sum')
@@ -266,6 +265,7 @@ def lasso_disagg(df_grouped, county_attr, a=1000, verbose=False):
     pred['pred_prop'] = 0
     county_val = county_val.append(pred)
     county_val = county_val.merge(counts[['agent_id','county_id','state_abbr']].drop_duplicates(), on='agent_id')
+    county_val = county_val.astype({'group':'int64'})
 
     coeff = pd.DataFrame(data=coeff, columns=data.drop(columns=['agent_id','fips_code','group','sector_abbr','year','prop','number_of_adopters','total']).columns)
 
