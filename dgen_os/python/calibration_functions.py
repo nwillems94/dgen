@@ -217,12 +217,12 @@ def lasso_disagg(df_grouped, county_attr, a=1000, verbose=False):
         if pred.agent_id.nunique()==1:            
             print("\nOnly one agent in group", group)
             pred['pred_prop'] = 1
-            county_val = county_val.append(pred)
+            county_val = county_val.append(pred.drop(columns='fips_code'))
             continue
         elif pred.fips_code.nunique()==1:
             print("\nOnly one county in group", group)
             pred['pred_prop'] = 1 / pred.agent_id.nunique()
-            county_val = county_val.append(pred)
+            county_val = county_val.append(pred.drop(columns='fips_code'))
             continue
         else:
             Y_train = data.query("group==@group & year<year.max()")['prop']
