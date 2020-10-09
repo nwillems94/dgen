@@ -1,3 +1,12 @@
+"""
+Name: calibration_functions
+Purpose: Determine market groups and calibrate diffusion parameters
+
+    (1) Group agents into markets
+    (2) Calibrate Bass parameters at market level
+    (3) Estimate adoption propensity for each agent across groups
+
+"""
 
 import config
 import numpy as np
@@ -9,10 +18,26 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Lasso
 
 
-#simple bass curve to fit nonlinear regression to
 def differential_Bass(x, p, q, mms):
-    #x is a vector of market share at time t (Cumulative installs * Max market size)
-    #y is a vector of market share at time t+1
+    """
+    Simple, differential form of a Bass curve to regress onto
+
+    Parameters
+    ----------
+    x : pandas Series of floats
+        vector of market share at time t (Cumulative installs * Max market size)
+    p : float
+        Bass parameter p
+    q : float
+        Bass parameter q
+    mms : numpy array
+        vector of maximum market share values to constrain fit
+
+    Returns
+    -------
+    Pandas series of flaots: vector of market share at time t+1
+    """
+
     return np.clip(-q*x*x + (1+q-p)*x + p, 0, mms)
 
 ####****---- END OF FUNCTION differential_Bass ----****####
@@ -20,8 +45,20 @@ def differential_Bass(x, p, q, mms):
 
 
 
-# calibrate p & q values for the differential_Bass function
 def calibrate_Bass(df_grouped):
+    """
+    Calibrate Bass parameters using the differential form of the Bass model
+
+    Parameters
+    ----------
+    df_grouped : pandas dataframe
+        matches group (along with historic market data) to agent_id's
+
+    Returns
+    -------
+    pandas dataframe of p & q Bass parameters for each group and sector
+    """
+
     df_grouped['max_market_size'] = df_grouped['max_market_share'] * df_grouped['customers_in_bin']
     market = df_grouped.groupby(['group','year','sector_abbr'], as_index=False).agg({'customers_in_bin':'sum', 'number_of_adopters':'sum','max_market_size':'sum','pct_of_bldgs_developable':'mean'})
     market['f'] = np.clip(market['number_of_adopters'] / market['customers_in_bin'], 0, 1)
@@ -53,6 +90,20 @@ def calibrate_Bass(df_grouped):
 
 # format data for use in market_grouper
 def assemble_market_data(df):
+    """
+    Format solar_agents.df for market_grouper
+    (ie merge historic market data scaled to agent level)
+
+    Parameters
+    ----------
+    df : pandas dataframe
+        Main df
+
+    Returns
+    -------
+    pandas dataframe with additional historic columns
+    'system_kw_cum', 'number_of_adopters' for each historic year
+    """
 
     # calculate scale factors by county
     df = df.astype({'developable_roof_sqft': 'float64', 'pct_of_bldgs_developable': 'float64'})
@@ -89,8 +140,31 @@ def assemble_market_data(df):
 # ==================================================================================================================== #
 
 
-# define groups based on the data in agent_attr
+
 def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zeros=True, verbose=False):
+    """
+    Group agents into markets using a grouping_method and additional attributes
+
+    Parameters
+    ----------
+    county_attr : pandas dataframe
+        (non-economic) county level data containing additional attributes
+    df : pandas dataframe
+        Main df with market_data merged in
+    grouping_method : string
+        One of "kmeans","manual","state"
+    kmeans_vars : list
+        column names in df or county_attr on which to cluster when using
+        grouping_method "kmeans"
+    exclude_zeros : boolean
+        should agents with 0 adoption be in their own group?
+    verbose : boolean
+        enable verbose printing
+
+    Returns
+    -------
+    pandas dataframe of agent_id's assigned to groups
+    """
 
     # check to make sure vars exist in dataframes
     df_vars = set(kmeans_vars) - set(county_attr.columns)
@@ -203,6 +277,28 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
 
 #fit model to the distribution of counts within each group
 def lasso_disagg(df_grouped, county_attr, a=2000, verbose=False):
+    """
+    fit a model to the distribution of counts among agents in each group.
+    Use the lasso method to select regression variables
+
+    Parameters
+    ----------
+    df_grouped : pandas dataframe
+        matches group (along with historic market data) to agent_id's
+    county_attr : pandas dataframe
+        (non-economic) county level data containing additional attributes
+    a : int
+        alpha parameter for sklearn.linear_model.Lasso
+    verbose : boolean
+        enable verbose printing
+
+    Returns
+    -------
+    pandas dataframe of agent_id with groups and yearly predicted proportions of adoption
+    pandas dataframe of the regression coefficients for the variables in county_attr
+    agent_val, propensities
+    """
+
     counts = df_grouped[['group','agent_id','state_abbr','county_id','year','sector_abbr','number_of_adopters']].copy()
     counts = counts.set_index('agent_id')
     counts['total'] = counts.groupby(['group','year','sector_abbr'], sort=False).number_of_adopters.transform('sum')
