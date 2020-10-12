@@ -352,7 +352,7 @@ def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
 
     market_cols = ['sector_abbr', 'developable_agent_weight', 'max_market_share', 'market_share_last_year', 'market_value_last_year',
                    'system_kw', 'system_capex_per_kw', 'adopters_cum_last_year', 'system_kw_cum_last_year', 
-                   'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year', 'initial_batt_kw', 'initial_batt_kwh', 'customers_in_bin',
+                   'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year', 'initial_batt_kw', 'initial_batt_kwh',
                    'initial_pv_kw', 'initial_number_of_adopters', 'initial_market_share', 'initial_market_value']
     ms_cols = ['max_market_share', 'market_share_last_year','initial_market_share']
     last_year_dict = {'market_share':'market_share_last_year',
@@ -371,17 +371,17 @@ def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
                             agent_groups.drop(columns=['state_abbr','county_id','pred_prop']),
                             on=['agent_id','sector_abbr'])
     solar_groups = solar_groups.astype({'developable_agent_weight':'float64', 'system_capex_per_kw':'float64',
-                                        'batt_kw':'float64', 'batt_kwh':'float64', 'system_kw':'float64', 'customers_in_bin':'float64'})
+                                        'batt_kw':'float64', 'batt_kwh':'float64', 'system_kw':'float64'})
     
-    solar_groups[ms_cols] = solar_groups[ms_cols].mul(solar_groups['customers_in_bin'], axis="index")
+    solar_groups[ms_cols] = solar_groups[ms_cols].mul(solar_groups['developable_agent_weight'], axis="index")
     solar_groups = solar_groups.groupby(["group","sector_abbr"], as_index=False).sum()
-    solar_groups[ms_cols] = solar_groups[ms_cols].div(solar_groups['customers_in_bin'], axis="index")
+    solar_groups[ms_cols] = solar_groups[ms_cols].div(solar_groups['developable_agent_weight'], axis="index")
 
     ##??? temporarily use "group" as "agent_id", to keep compatibility of aggreagtion functions
     solar_groups['agent_id'] = solar_groups['group']
-    cust_in_bin = solar_groups['customers_in_bin'].astype('float64').copy()
+    cust_in_bin = solar_groups['developable_agent_weight'].astype('float64').copy()
     
-    solar_groups, _ = calc_diffusion_solar(solar_groups.drop(columns='customers_in_bin'), is_first_year, bass_params,
+    solar_groups, _ = calc_diffusion_solar(solar_groups, is_first_year, bass_params,
                                            year, id_var="group", no_constraint=True)
 
     # constrain to historical values
