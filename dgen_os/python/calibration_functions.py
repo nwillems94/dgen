@@ -59,10 +59,10 @@ def calibrate_Bass(df_grouped):
     pandas dataframe of p & q Bass parameters for each group and sector
     """
 
-    df_grouped['max_market_size'] = df_grouped['max_market_share'] * df_grouped['customers_in_bin']
-    market = df_grouped.groupby(['group','year','sector_abbr'], as_index=False).agg({'customers_in_bin':'sum', 'number_of_adopters':'sum','max_market_size':'sum','pct_of_bldgs_developable':'mean'})
-    market['f'] = np.clip(market['number_of_adopters'] / market['customers_in_bin'], 0, 1)
-    market['mms'] = np.clip(market['max_market_size'] / market['customers_in_bin'], 0, 1)
+    df_grouped['max_market_size'] = df_grouped['max_market_share'] * df_grouped['developable_agent_weight']
+    market = df_grouped.groupby(['group','year','sector_abbr'], as_index=False).agg({'developable_agent_weight':'sum', 'number_of_adopters':'sum','max_market_size':'sum','pct_of_bldgs_developable':'mean'})
+    market['f'] = np.clip(market['number_of_adopters'] / market['developable_agent_weight'], 0, 1)
+    market['mms'] = np.clip(market['max_market_size'] / market['developable_agent_weight'], 0, 1)
 
     fitted_Bass = []
     for group in market.group.unique():
@@ -258,7 +258,7 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
         print(groups)
     
     agent_group = pd.merge(agent_group, df, on='agent_id', suffixes=(None, '_redundant'))
-    agent_group = agent_group[['group','agent_id','customers_in_bin','max_market_share']]
+    agent_group = agent_group[['group','agent_id','developable_agent_weight','max_market_share']]
 
     return agent_group
 
