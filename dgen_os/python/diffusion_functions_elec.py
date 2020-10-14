@@ -314,7 +314,7 @@ def calc_equiv_time(df):
 
 
 #=============================================================================
-def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
+def propensity_model(df, bass_params, agent_groups, year, is_first_year):
     """
     Use a propensity model to calculate diffusion:
         - Use Bass diffusion to calculate the total adoption in a group
@@ -346,9 +346,7 @@ def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
                    'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year',
                    'initial_pv_kw', 'initial_number_of_adopters', 'initial_market_share', 'initial_market_value']
     ms_cols = ['max_market_share', 'market_share_last_year','initial_market_share']
-    last_year_dict = {'market_share':'market_share_last_year',
-                      'max_market_share':'max_market_share_last_year',
-                      'number_of_adopters':'adopters_cum_last_year',
+    last_year_dict = {'number_of_adopters':'adopters_cum_last_year',
                       'market_value': 'market_value_last_year',
                       'system_kw_cum':'system_kw_cum_last_year',
                       'batt_kw_cum':'batt_kw_cum_last_year',
@@ -370,21 +368,15 @@ def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
 
     ##??? temporarily use "group" as "agent_id", to keep compatibility of aggreagtion functions
     solar_groups['agent_id'] = solar_groups['group']
-    cust_in_bin = solar_groups['developable_agent_weight'].astype('float64').copy()
     
     solar_groups, _ = calc_diffusion_solar(solar_groups, is_first_year, bass_params,
                                            year, id_var="group", no_constraint=True)
 
     # constrain to historical values
     if year in (2014, 2016, 2018):
-        scaled_cols = ['system_kw_cum', 'number_of_adopters', 'batt_kw_cum', 'batt_kwh_cum']
-                       #'new_adopt_fraction', 'bass_market_share', 'market_share']
-        
         solar_groups['scale_factor'] = solar_groups['historic_kw_cum'] / solar_groups['system_kw_cum']
         
         solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['scale_factor'], axis="index")
-        solar_groups[scaled_cols] = solar_groups[scaled_cols].multiply(solar_groups['scale_factor'], axis="index")
-        solar_groups['market_share'] = solar_groups['number_of_adopters'].div(cust_in_bin, axis="index")
         
         solar_groups.drop(columns='scale_factor', inplace=True)
         agent_groups.drop(columns='historic_kw_cum', inplace=True)
@@ -392,16 +384,19 @@ def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
 
     ## DISAGGREGATE TO AGENT LEVEL BASED ON NONECONOMIC FACTORS
     # drop the group agent_id's and get the original agent_id's back
-    solar_groups = pd.merge(solar_groups.drop(columns='agent_id'), agent_groups,
-                            on=['group','sector_abbr'], how="left")
-    #solar_groups.sort_values(by=['agent_id','year'], inplace=True)
+    solar_groups.drop(columns=['agent_id','developable_agent_weight'] + ms_cols, inplace=True)
+    solar_groups = pd.merge(solar_groups, agent_groups, on=['group','sector_abbr'], how="left")
+
     solar_groups.set_index('agent_id', inplace=True)
-    
+    solar_groups = solar_groups.join(df[ms_cols])
+
+    # join market_last_year_df data and enforce maximum market share constraint at agent level
+    if year not in (2014, 2016, 2018):
+        solar_groups['pred_prop'].where(solar_groups['market_share_last_year'] < solar_groups['max_market_share'], 0, inplace=True)
+
     # dissaggregate according to the predicted proportions
     solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['pred_prop'], axis="index")
-    ms_cols.extend(['new_adopt_fraction', 'bass_market_share', 'market_share'])
-    solar_groups[ms_cols] = solar_groups[ms_cols].clip(0,1)
-    
+
     solar_groups.drop(columns=['index','group','pred_prop'], inplace=True)
     df = df.join(solar_groups[[*(set(solar_groups.columns) - set(df.columns))]])
     df.reset_index(inplace=True)
@@ -412,14 +407,19 @@ def propsensity_model(df, bass_params, agent_groups, year, is_first_year):
         for key, value in last_year_dict.items():
             df[key].where(df[key] > df[value], df[value], inplace=True)
 
+    df['market_share'] = df.number_of_adopters.astype('float64') / df.developable_agent_weight.astype('float64')
+    df[ms_cols + ['new_adopt_fraction', 'bass_market_share', 'market_share']].clip(0, 1, inplace=True)
+
     # update the "new" fields to match the agent level change from last year
+    last_year_dict.update({'market_share':'market_share_last_year',
+                           'max_market_share':'max_market_share_last_year'})
     for key, value in new_vals_dict.items():
         df[value] = df[key] - df[last_year_dict[key]]
 
     
     market_last_year_df = df.copy()[['agent_id','initial_number_of_adopters', 'initial_pv_kw', 
-                                                  'initial_market_share', 'initial_market_value', 'new_system_kw', 
-                                                  *last_year_dict.keys()]]
+                                     'initial_market_share', 'initial_market_value', 'new_system_kw',
+                                     *last_year_dict.keys()]]
     market_last_year_df.rename(columns=last_year_dict, inplace=True)
     
     return df, market_last_year_df
