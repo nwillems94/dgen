@@ -291,7 +291,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
 
                         logger.info('\t\tUsing Propensity model with fits from {}'.format(propensity_year))
                         solar_agents.df, market_last_year_df = \
-                            diffusion_functions_elec.propsensity_model(solar_agents.df.copy(),
+                            diffusion_functions_elec.propensity_model(solar_agents.df.copy(),
                                                                         bass_params, agent_groups,
                                                                         year, is_first_year)
                     else:
