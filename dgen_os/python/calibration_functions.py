@@ -327,22 +327,22 @@ def lasso_disagg(df_grouped, county_attr, a=2000, verbose=False):
             pred['pred_prop'] = 1 / pred.agent_id.nunique()
             county_val = county_val.append(pred.drop(columns='fips_code'))
             continue
-        else:
-            Y_train = data.query("group==@group & year<year.max()")['prop']
+
+        Y_train = data.query("group==@group & year<year.max()")['prop']
             
-            # Training data. Identifier variable should be excluded
-            X_train = data.query("group==@group & year<year.max()").drop(
+        # Training data. Identifier variable should be excluded
+        X_train = data.query("group==@group & year<year.max()").drop(
                             columns=['agent_id','fips_code','group','sector_abbr','year','prop','number_of_adopters','total'])
             
-            pred.drop(columns='fips_code', inplace=True)
-            X_pred = data.query("group==@group").drop(
+        pred.drop(columns='fips_code', inplace=True)
+        X_pred = data.query("group==@group").drop(
                             columns=['agent_id','fips_code','group','sector_abbr','year','prop','number_of_adopters','total'])
         
-        lasso = Lasso(alpha=a)
-        lasso.fit(X_train, -np.log(1/(Y_train+1e-40) - 1)) #logit
-        pred['pred_prop'] = 1/(1+np.exp(-lasso.predict(X_pred))) - 1e-40
-        coeff.append(lasso.coef_)
+        lasso = Lasso().fit(X_train, Y_train)
+        pred['pred_prop'] = np.clip(lasso.predict(X_pred), 0, 1)
+        pred['pred_prop'] = pred.groupby(['year','sector_abbr']).pred_prop.transform(lambda x: x / x.sum())
 
+        coeff.append(lasso.coef_)
 
         if verbose==True:
             print("\nFor group:", group)
