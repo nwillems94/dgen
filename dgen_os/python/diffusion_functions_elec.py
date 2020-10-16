@@ -394,43 +394,44 @@ def propensity_model(df, bass_params, agent_groups, year, is_first_year):
     ## DISAGGREGATE TO AGENT LEVEL BASED ON NONECONOMIC FACTORS
     # drop the group agent_id's and get the original agent_id's back
     solar_groups.drop(columns=['agent_id','developable_agent_weight'] + ms_cols, inplace=True)
-    solar_groups = pd.merge(solar_groups, agent_groups, on=['group','sector_abbr'], how="left")
-
-    solar_groups.set_index('agent_id', inplace=True)
-    solar_groups = solar_groups.join(df[ms_cols])
-
-    # join market_last_year_df data and enforce maximum market share constraint at agent level
+    new_df = pd.merge(solar_groups, agent_groups, on=['group','sector_abbr'], how="right").set_index('agent_id')
+    new_df = df.join(new_df[[*(set(new_df.columns) - set(df.columns))]]).astype({'developable_agent_weight':'float64', 'number_of_adopters':'float64',
+                                                                                 'max_market_share':'float64', 'pred_prop':'float64'})
     if year not in (2014, 2016, 2018):
-        solar_groups['pred_prop'].where(solar_groups['market_share_last_year'] < solar_groups['max_market_share'], 0, inplace=True)
+        new_df['prop_adj'] = (new_df.max_market_share*new_df.developable_agent_weight /
+                              np.where((new_df.pred_prop==0) | (new_df.number_of_adopters==0), 0.00001,
+                                       (new_df.pred_prop * new_df.number_of_adopters)))
+        new_df['pred_prop'] = new_df.pred_prop.where(new_df.prop_adj > 1, new_df.pred_prop * new_df.prop_adj)
+        new_df.drop(columns='prop_adj', inplace=True)
 
     # dissaggregate according to the predicted proportions
-    solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['pred_prop'], axis="index")
+    new_df[[*last_year_dict.keys()]] = new_df[[*last_year_dict.keys()]].multiply(new_df['pred_prop'], axis="index")
 
-    solar_groups.drop(columns=['index','group','pred_prop'], inplace=True)
-    df = df.join(solar_groups[[*(set(solar_groups.columns) - set(df.columns))]])
-    df.reset_index(inplace=True)
+    new_df = new_df.drop(columns=['index','group','pred_prop']).reset_index()
 
     ## COORDINATE YEARS
     # make sure this year >= last year
     if is_first_year == False:
         for key, value in last_year_dict.items():
-            df[key].where(df[key] > df[value], df[value], inplace=True)
+            new_df[key].where(new_df[key] > new_df[value], new_df[value], inplace=True)
 
-    df['market_share'] = df.number_of_adopters.astype('float64') / df.developable_agent_weight.astype('float64')
-    df[ms_cols + ['new_adopt_fraction', 'bass_market_share', 'market_share']].clip(0, 1, inplace=True)
+    new_df['market_share'] = new_df.number_of_adopters / new_df.developable_agent_weight
+    new_df[ms_cols + ['new_adopt_fraction', 'bass_market_share', 'market_share']].clip(0, 1, inplace=True)
+    new_df['number_of_adopters'] = new_df.market_share * new_df.developable_agent_weight
+
 
     # update the "new" fields to match the agent level change from last year
     last_year_dict.update({'market_share':'market_share_last_year',
                            'max_market_share':'max_market_share_last_year'})
     for key, value in new_vals_dict.items():
-        df[value] = df[key] - df[last_year_dict[key]]
+        new_df[value] = new_df[key] - new_df[last_year_dict[key]]
 
-    market_last_year_df = df.copy()[['agent_id', 'new_system_kw',
-                                     'initial_number_of_adopters', 'initial_market_share', 'initial_market_value',
-                                     'initial_pv_kw', 'initial_batt_kw', 'initial_batt_kwh',
-                                      *last_year_dict.keys()]]
+    market_last_year_df = new_df.copy()[['agent_id', 'new_system_kw',
+                                        'initial_number_of_adopters', 'initial_market_share', 'initial_market_value',
+                                        'initial_pv_kw', 'initial_batt_kw', 'initial_batt_kwh',
+                                         *last_year_dict.keys()]]
     market_last_year_df.rename(columns=last_year_dict, inplace=True)
     
-    return df, market_last_year_df
+    return new_df, market_last_year_df
     
 #=============================================================================
