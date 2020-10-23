@@ -233,6 +233,8 @@ class ModelSettings(object):
                 check_type(self.get(property_name), bool)
             except TypeError as e:
                 raise TypeError('Invalid {0}: {1}'.format(property_name, e))
+            if self.get(property_name) == True and self.get('realtime_calibration') == False:
+                raise Exception('Propensity model requires realitme calibration. Please update config.py')
 
         else:
             print('No validation method for property {} exists.'.format(property_name))
