@@ -341,88 +341,81 @@ def propensity_model(df, bass_params, agent_groups, year, is_first_year):
         market to inform diffusion in next year
     """
 
-    market_cols = ['sector_abbr', 'developable_agent_weight', 'max_market_share', 'market_share_last_year', 'market_value_last_year',
-                   'system_kw', 'system_capex_per_kw', 'adopters_cum_last_year', 'system_kw_cum_last_year', 
-                   'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year',
-                   'initial_pv_kw', 'initial_number_of_adopters', 'initial_market_share', 'initial_market_value']
     ms_cols = ['max_market_share', 'market_share_last_year','initial_market_share']
     last_year_dict = {'number_of_adopters':'adopters_cum_last_year',
                       'market_value': 'market_value_last_year',
+                      'market_share':'market_share_last_year',
+                      'max_market_share':'max_market_share_last_year',
                       'system_kw_cum':'system_kw_cum_last_year',
                       'batt_kw_cum':'batt_kw_cum_last_year',
                       'batt_kwh_cum':'batt_kwh_cum_last_year'}
-    new_vals_dict = {'number_of_adopters':'new_adopters',
+    new_vals_dict = {'number_of_adopters':'new_adopters', 'system_kw_cum':'new_system_kw',
                      'batt_kw_cum':'new_batt_kw', 'batt_kwh_cum':'new_batt_kwh',
-                     'market_share':'new_market_share','market_value':'new_market_value',
-                     'system_kw_cum':'new_system_kw'}
+                     'market_value': 'new_market_value'}
 
-    solar_groups = pd.merge(df[market_cols].reset_index(),
-                            agent_groups.drop(columns=['state_abbr','county_id','pred_prop']),
+    solar_groups = pd.merge(df[['sector_abbr', 'developable_agent_weight', 'max_market_share', 'market_share_last_year', 'market_value_last_year',
+                                'system_kw', 'system_capex_per_kw', 'adopters_cum_last_year', 'system_kw_cum_last_year',
+                                'batt_kw', 'batt_kwh', 'batt_kw_cum_last_year', 'batt_kwh_cum_last_year','initial_pv_kw',
+                                'initial_number_of_adopters', 'initial_market_share', 'initial_market_value']].reset_index(),
+                            agent_groups[['group', 'agent_id', 'sector_abbr']],
                             on=['agent_id','sector_abbr'])
     solar_groups = solar_groups.astype({'developable_agent_weight':'float64', 'system_capex_per_kw':'float64',
                                         'batt_kw':'float64', 'batt_kwh':'float64', 'system_kw':'float64'})
-    
+
+    # aggregate values needed to calculate diffusion
+    #  taking special care with columns which are scaled 0-1 (ms_cols)
     solar_groups[ms_cols] = solar_groups[ms_cols].mul(solar_groups['developable_agent_weight'], axis="index")
     solar_groups = solar_groups.groupby(["group","sector_abbr"], as_index=False).sum()
     solar_groups[ms_cols] = solar_groups[ms_cols].div(solar_groups['developable_agent_weight'], axis="index")
 
-    ##??? temporarily use "group" as "agent_id", to keep compatibility of aggreagtion functions
-    solar_groups['agent_id'] = solar_groups['group']
-    
+    # temporarily use "group" as "agent_id", to keep compatibility of aggreagtion functions
+    solar_groups.set_index(pd.Index(solar_groups.group, name='agent_id'), inplace=True)
+    # determine the number of new_adopters at the group level
     solar_groups, _ = calc_diffusion_solar(solar_groups, is_first_year, bass_params,
                                            year, id_var="group", no_constraint=True)
 
-    # constrain to historical values
-    if year in (2014, 2016, 2018):
-        solar_groups['scale_factor'] = solar_groups['historic_kw_cum'] / solar_groups['system_kw_cum']
-        
-        solar_groups[[*last_year_dict.keys()]] = solar_groups[[*last_year_dict.keys()]].multiply(solar_groups['scale_factor'], axis="index")
-        
-        solar_groups.drop(columns='scale_factor', inplace=True)
-        agent_groups.drop(columns='historic_kw_cum', inplace=True)
-        
-
-    ## DISAGGREGATE TO AGENT LEVEL BASED ON NONECONOMIC FACTORS
     # drop the group agent_id's and get the original agent_id's back
-    solar_groups.drop(columns=['agent_id','developable_agent_weight'] + ms_cols, inplace=True)
-    new_df = pd.merge(solar_groups, agent_groups, on=['group','sector_abbr'], how="right").set_index('agent_id')
-    new_df = df.join(new_df[[*(set(new_df.columns) - set(df.columns))]]).astype({'developable_agent_weight':'float64', 'number_of_adopters':'float64',
-                                                                                 'max_market_share':'float64', 'pred_prop':'float64'})
-    if year not in (2014, 2016, 2018):
-        new_df['prop_adj'] = (new_df.max_market_share*new_df.developable_agent_weight /
-                              np.where((new_df.pred_prop==0) | (new_df.number_of_adopters==0), 0.00001,
-                                       (new_df.pred_prop * new_df.number_of_adopters)))
-        new_df['pred_prop'] = new_df.pred_prop.where(new_df.prop_adj > 1, new_df.pred_prop * new_df.prop_adj)
-        new_df.drop(columns='prop_adj', inplace=True)
+    new_df = pd.merge(solar_groups[['new_adopters','group','sector_abbr']].astype({'new_adopters':'float64'}),
+                      agent_groups, on=['group','sector_abbr'], how="right").set_index('agent_id')
+    # join the other necessary columns from solar_agents.df
+    new_df = df.join(new_df[[*(set(new_df.columns) - set(df.columns))]])
+    new_df = new_df.astype({col:'float64' for col in ['pred_prop','developable_agent_weight',
+                                                      'system_kw','batt_kw','batt_kwh',
+                                                      'system_capex_per_kw','max_market_share']})
+    if year in (2014, 2016, 2018):
+        # constrain to historical values
+        new_df['historic_kw_cum'] = new_df.astype({'historic_kw_cum':'float64'}).groupby(['group','sector_abbr'])['historic_kw_cum'].transform('sum')
+        new_df['new_adopters'] = ((new_df['historic_kw_cum'] -
+                                  new_df['system_kw_cum_last_year'].astype('float64')) /
+                                  np.where(new_df['sector_abbr'] == 'res', 5.0, 100.0))
+        new_df.drop(columns='historic_kw_cum', inplace=True)
+    else:
+        # enforce maximum market share constraint at agent level
+        max_prop = new_df.pred_prop.where(new_df.new_adopters==0,
+                                          ((new_df.max_market_share * new_df.developable_agent_weight)
+                                           - new_df.adopters_cum_last_year) / new_df.new_adopters)
+        new_df.pred_prop.where(new_df.pred_prop < max_prop, max_prop.clip(lower=0), inplace=True)
 
     # dissaggregate according to the predicted proportions
-    new_df[[*last_year_dict.keys()]] = new_df[[*last_year_dict.keys()]].multiply(new_df['pred_prop'], axis="index")
+    new_df['new_adopters'] = new_df['new_adopters'].multiply(new_df['pred_prop'], axis="index")
+    new_df = new_df.drop(columns=['group','pred_prop']).reset_index()
 
-    new_df = new_df.drop(columns=['index','group','pred_prop']).reset_index()
+    new_df['new_market_share'] =  new_df['new_adopters'] / new_df['developable_agent_weight']
+    new_df['new_market_value'] = new_df['new_adopters'] * new_df['system_kw'] * new_df['system_capex_per_kw']
+    new_df[['new_system_kw','new_batt_kw','new_batt_kwh']] = new_df[['system_kw','batt_kw','batt_kwh']].multiply(new_df['new_adopters'], axis="index")
 
-    ## COORDINATE YEARS
-    # make sure this year >= last year
-    if is_first_year == False:
-        for key, value in last_year_dict.items():
-            new_df[key].where(new_df[key] > new_df[value], new_df[value], inplace=True)
-
-    new_df['market_share'] = new_df.number_of_adopters / new_df.developable_agent_weight
-    new_df[ms_cols + ['new_adopt_fraction', 'bass_market_share', 'market_share']].clip(0, 1, inplace=True)
-    new_df['number_of_adopters'] = new_df.market_share * new_df.developable_agent_weight
-
-
-    # update the "new" fields to match the agent level change from last year
-    last_year_dict.update({'market_share':'market_share_last_year',
-                           'max_market_share':'max_market_share_last_year'})
+    # update the cumulative values given the 'new' adoption values
     for key, value in new_vals_dict.items():
-        new_df[value] = new_df[key] - new_df[last_year_dict[key]]
+        new_df[key] = new_df[last_year_dict[key]] + new_df[value]
+    new_df['market_share'] = new_df['market_share_last_year'] + new_df['new_market_share']
 
-    
+    # create the dataframe of last years values
     market_last_year_df = new_df.copy()[['agent_id','initial_number_of_adopters', 'initial_pv_kw',
                                      'initial_market_share', 'initial_market_value', 'new_system_kw',
                                      *last_year_dict.keys()]]
     market_last_year_df.rename(columns=last_year_dict, inplace=True)
-    
+
     return new_df, market_last_year_df
-    
-#=============================================================================
+
+#===========================================================================
+
