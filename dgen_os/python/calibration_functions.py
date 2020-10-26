@@ -328,8 +328,9 @@ def lasso_disagg(df_grouped, county_attr, a=2000, verbose=False):
 
     counts = df_grouped[['group','agent_id','state_abbr','county_id','year','sector_abbr','number_of_adopters']].copy()
     counts = counts.set_index('agent_id')
-    counts['total'] = counts.groupby(['group','year','sector_abbr'], sort=False).number_of_adopters.transform('sum')
-    counts['prop'] = np.clip(counts['number_of_adopters'] / np.maximum(counts['total'],0.001), 0, 1)
+    counts['total'] = counts.groupby(['group','year','sector_abbr']).number_of_adopters.transform('sum')
+    counts['prop'] = counts.number_of_adopters.where(counts.total==0, counts.number_of_adopters/counts.total)
+
     counts = counts.sort_values(by="year")
     counts.reset_index(level=0, inplace=True)
 
@@ -346,12 +347,12 @@ def lasso_disagg(df_grouped, county_attr, a=2000, verbose=False):
         
         if pred.agent_id.nunique()==1:            
             print("\nOnly one agent in group", group)
-            pred['pred_prop'] = 1
+            pred['pred_prop'] = 1.0
             county_val = county_val.append(pred.drop(columns='fips_code'))
             continue
         elif pred.fips_code.nunique()==1:
             print("\nOnly one county in group", group)
-            pred['pred_prop'] = 1 / pred.agent_id.nunique()
+            pred['pred_prop'] = 1.0 / pred.agent_id.nunique()
             county_val = county_val.append(pred.drop(columns='fips_code'))
             continue
 
@@ -367,6 +368,7 @@ def lasso_disagg(df_grouped, county_attr, a=2000, verbose=False):
         
         lasso = Lasso().fit(X_train, Y_train)
         pred['pred_prop'] = np.clip(lasso.predict(X_pred), 0, 1)
+        pred.pred_prop.where(pred.groupby(['year','sector_abbr']).pred_prop.transform('sum')!=0, 1, inplace=True)
         pred['pred_prop'] = pred.groupby(['year','sector_abbr']).pred_prop.transform(lambda x: x / x.sum())
 
         coeff.append(lasso.coef_)
