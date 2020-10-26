@@ -180,8 +180,7 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
     grouping_method : string
         One of "kmeans","manual","state"
     kmeans_vars : list
-        column names in df or county_attr on which to cluster when using
-        grouping_method "kmeans"
+        column names in df or county_attr on which to cluster when using grouping_method "kmeans"
     exclude_zeros : boolean
         should agents with 0 adoption be in their own group?
     verbose : boolean
@@ -213,24 +212,18 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
         agent_group = agent_group[~agent_group.county_id.isin(zero_counties)]
     
     ##GROUPING
-    nclusters = np.clip(agent_group.county_id.nunique()//2, 2, 20)
-    #group by **MAXIMUM MARKET SHARE**
-    if grouping_method == "mms":
-        print("Grouping by Maximum Market Share")
-
-        #scale data around mean and to unit variance before clustering
-        data = agent_group.loc[:, "max_market_share"].to_numpy(copy=True).reshape(-1,1)
-        scaled = StandardScaler().fit(data)
-        clusters = KMeans(n_clusters=nclusters, random_state=0).fit(scaled.transform(data))
-        agent_group.insert(0, 'group', clusters.labels_+1)
-        agent_group = agent_group.append(agent_group_zero)
     
     #group using **K MEANS** clustering
-    elif grouping_method == "kmeans":
+    if grouping_method == "kmeans":
         print("grouping using kmeans clustering")
 
         #scale data around mean and to unit variance before clustering
-        data = agent_group.loc[:, kmeans_vars]
+        if len(kmeans_vars) == 1:
+            # reshaping is required if there is only a single variable
+            data = agent_group.loc[:, kmeans_vars].to_numpy(copy=True).reshape(-1,1)
+        else:
+            data = agent_group.loc[:, kmeans_vars]
+
         scaled = StandardScaler().fit(data)
         X = scaled.transform(data)
         
@@ -256,6 +249,7 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
     #**MANUAL** grouping method
     elif grouping_method == "manual":
         print("Grouping by Phase of Adoption")
+
         agent_group = df.loc[(df["sector_abbr"] == 'res')].copy()
         agent_group.insert(0, 'group', np.nan)
         agent_group.sort_values(by=['year'], inplace=True)
@@ -271,7 +265,6 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
             if sum(agent_group.query("agent_id==@agentid & year<2018")['number_of_adopters'])==0:
                 agent_group.loc[agent_group['agent_id']==agentid, 'group'] = '-'*5
             
-        #print(agent_group.head())
         if "year" in county_attr.columns:
             agent_group = agent_group.loc[agent_group["year"] == county_attr["year"].min()]
         else:
@@ -280,6 +273,7 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
     #default groups are **STATES**
     else:
         print("Grouping by State")
+
         if exclude_zeros==True:
             agent_group = pd.concat([agent_group, agent_group_zero.drop(columns='group')])
         agent_group.insert(0, 'group', agent_group.state_abbr.factorize()[0] + 1)
