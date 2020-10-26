@@ -18,6 +18,32 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Lasso
 
 
+def tune_maximum_market_share(df):
+    """
+    Fit maximum market share (MMS) and payback period (PP) to MMS = exp(alpha * PP)
+
+    Parameters
+    ----------
+    df : pandas dataframe
+        Main df
+
+    Returns
+    -------
+    Pandas dataframe with revised maximum_market_share column
+    """
+
+    MMS = np.maximum(df['adopters_cum_last_year'] / df['developable_agent_weight'], df['max_market_share'])
+    alpha, _ = curve_fit(lambda x, a: np.exp(-a * x), df.loc[MMS > 0].payback_period, MMS[MMS > 0], bounds=(0,np.inf))
+
+    df.max_market_share.where(MMS==0, np.exp(-alpha * df['payback_period']), inplace=True)
+
+    return df
+
+####****---- END OF FUNCTION tune_maximum_market_share ----****####
+# ==================================================================================================================== #
+
+
+
 def differential_Bass(x, p, q, mms):
     """
     Simple, differential form of a Bass curve to regress onto

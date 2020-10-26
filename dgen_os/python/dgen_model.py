@@ -235,6 +235,9 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                     if model_settings.realtime_calibration == True:
                         calibration_time = time.time()
 
+                        if is_first_year == False:
+                            solar_agents.df = calib.tune_maximum_market_share(solar_agents.df)
+
                         agent_attr = refUSA.copy()
                         #??? 'avg_monthly_kwh', 'max_market_share','wholesale_elec_price_dollars_per_kwh', 'payback_period'
                         grouping_vars = ['avg_elec_price_cents_per_kwh', 'avg_monthly_kwh','pct_of_bldgs_developable', 'WEALTH_FINDER_SCORE', 'PPI_DIV_1000']
