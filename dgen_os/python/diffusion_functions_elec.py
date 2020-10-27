@@ -92,11 +92,6 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
         
         # read csv of historical capacity values by state and sector
         historical_state_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_STATE)
-        # historical_county_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_COUNTY)[['state','state_abbr','sector_abbr','year','imputed_cum_size_kW']]
-        # historical_state_capacity_df = (historical_county_capacity_df
-        #                                 .groupby(['state','state_abbr','sector_abbr','year'])
-        #                                 .sum().div(1000).rename(columns={'imputed_cum_size_kW':'observed_capacity_mw'})
-        #                                 .reset_index().query("year in [2014,2016,2018]"))
         
         # join historical data to agent df
         df = pd.merge(df, historical_state_capacity_df, how='left', on=['state_abbr', 'sector_abbr', 'year'])
@@ -106,7 +101,7 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
         df['scale_factor'] =  np.where(df['state_kw_cum'] == 0, 1.0/df['agent_count'], df['system_kw_cum'] / df['state_kw_cum'])
         
         # use scale factor to constrain agent capacity values to historical values
-        df['system_kw_cum'] = df['scale_factor'] * df['observed_capacity_mw'] * 1000.
+        df['system_kw_cum'] = df['scale_factor'] * df['observed_capacity_kw']
         
         # recalculate number of adopters using anecdotal values
         df['number_of_adopters'] = np.where(df['sector_abbr'] == 'res', df['system_kw_cum']/5.0, df['system_kw_cum']/100.0)
@@ -116,7 +111,7 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
                            df['number_of_adopters'] / df['developable_agent_weight'])
         df['market_share'] = df['market_share'].astype(np.float64)
         
-        df.drop(['agent_count', 'state_kw_cum', 'state', 'observed_capacity_mw', 'scale_factor'], axis=1, inplace=True)
+        df.drop(columns=['agent_count', 'state_kw_cum', 'state', 'observed_capacity_kw', 'scale_factor'], inplace=True)
     
     market_last_year = df[['agent_id',
                             'market_share', 'max_market_share', 'number_of_adopters',
