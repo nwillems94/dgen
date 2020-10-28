@@ -117,7 +117,7 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                 cols_base = list(solar_agents.df.columns)
                 
                 if model_settings.realtime_calibration == True:
-                    market_data = calib.assemble_market_data(solar_agents.df.reset_index())
+                    market_data = calib.assemble_historic_market_data(solar_agents.df.reset_index())
                 
             #==============================================================================
             # TECHNOLOGY DEPLOYMENT
@@ -280,8 +280,8 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                             
                             bass_params = bass_params.drop(columns="agent_id").drop_duplicates()
                             if year in (2014, 2016, 2018):
-                                agent_groups = agent_groups.query("year==@year")[['state_abbr','county_id','group','agent_id','sector_abbr','system_kw_cum']]
-                                agent_groups.rename(columns={'system_kw_cum':'historic_kw_cum'}, inplace=True)
+                                agent_groups = agent_groups.query("year==@year")[['state_abbr','county_id','group','agent_id','sector_abbr','system_kw_cum','number_of_adopters']]
+                                agent_groups.rename(columns={'system_kw_cum':'historic_kw_cum','number_of_adopters':'historic_adopters_cum'}, inplace=True)
                             else:
                                 agent_groups = agent_groups[['state_abbr','county_id','group','agent_id','sector_abbr']].drop_duplicates()
                             

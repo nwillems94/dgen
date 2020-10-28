@@ -78,18 +78,10 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
     # constrain state-level capacity totals to known historical values
     if year in (2014, 2016, 2018) and no_constraint==False:
         group_cols = ['state_abbr', 'sector_abbr', 'year']
-        state_capacity_total = (df[group_cols+['system_kw_cum', 'agent_id']].groupby(group_cols)
-                                                                            .agg({'system_kw_cum':'sum', 'agent_id':'count'})
-                                                                            .rename(columns={'system_kw_cum':'state_kw_cum', 'agent_id':'agent_count'})
-                                                                            .reset_index())
-        
-        # coerce dtypes
-        state_capacity_total.state_kw_cum = state_capacity_total.state_kw_cum.astype(np.float64) 
-        df.system_kw_cum = df.system_kw_cum.astype(np.float64) 
-        
-        # merge state totals back to agent df
-        df = pd.merge(df, state_capacity_total, how = 'left', on = ['state_abbr', 'sector_abbr', 'year'])
-        
+        df = df.astype({'system_kw_cum':'float64','number_of_adopters':'float64'})
+        df[['state_kw_cum','state_adopters_cum']] = df.groupby(group_cols)[['system_kw_cum','number_of_adopters']].transform('sum')
+        df['agent_count'] = df.groupby(group_cols).agent_id.transform('count')
+
         # read csv of historical capacity values by state and sector
         historical_state_capacity_df = pd.read_csv(config.INSTALLED_CAPACITY_BY_STATE)
         
@@ -98,24 +90,20 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
         
         # calculate scale factor - weight that is given to each agent based on proportion of state total
         # where state cumulative capacity is 0, proportion evenly to all agents
-        df['scale_factor'] =  np.where(df['state_kw_cum'] == 0, 1.0/df['agent_count'], df['system_kw_cum'] / df['state_kw_cum'])
-        
         # use scale factor to constrain agent capacity values to historical values
-        df['system_kw_cum'] = df['scale_factor'] * df['observed_capacity_kw']
+        df['system_kw_cum'] = df['observed_capacity_kw'] * np.where(df['state_kw_cum'] == 0, 1.0/df['agent_count'], df['system_kw_cum'] / df['state_kw_cum'])
+        df['number_of_adopters'] = df['observed_count'] * np.where(df['state_adopters_cum'] == 0, 1.0/df['agent_count'], df['number_of_adopters'] / df['state_adopters_cum'])
         
-        # recalculate number of adopters using anecdotal values
-        df['number_of_adopters'] = np.where(df['sector_abbr'] == 'res', df['system_kw_cum']/5.0, df['system_kw_cum']/100.0)
-    
         # recalculate market share
         df['market_share'] = np.where(df['developable_agent_weight'] == 0, 0.0, 
-                           df['number_of_adopters'] / df['developable_agent_weight'])
+                                      df['number_of_adopters'] / df['developable_agent_weight'])
         df['market_share'] = df['market_share'].astype(np.float64)
         
-        df.drop(columns=['agent_count', 'state_kw_cum', 'state', 'observed_capacity_kw', 'scale_factor'], inplace=True)
+        df.drop(columns=['agent_count', 'state_kw_cum', 'state_adopters_cum', 'state', 'observed_capacity_kw', 'observed_count'], inplace=True)
     
     market_last_year = df[['agent_id',
-                            'market_share', 'max_market_share', 'number_of_adopters',
-                            'market_value', 'initial_number_of_adopters', 'initial_pv_kw', 'initial_market_share', 'initial_market_value',
+                            'market_share', 'max_market_share', 'number_of_adopters', 'market_value',
+                            'initial_number_of_adopters', 'initial_pv_kw', 'initial_market_share', 'initial_market_value',
                             'system_kw_cum', 'new_system_kw', 'batt_kw_cum', 'batt_kwh_cum']]
 
     market_last_year.rename(columns={'market_share':'market_share_last_year', 
@@ -379,11 +367,10 @@ def propensity_model(df, bass_params, agent_groups, year, is_first_year):
                                                       'system_capex_per_kw','max_market_share']})
     if year in (2014, 2016, 2018):
         # constrain to historical values
-        new_df['historic_kw_cum'] = new_df.astype({'historic_kw_cum':'float64'}).groupby(['group','sector_abbr'])['historic_kw_cum'].transform('sum')
-        new_df['new_adopters'] = ((new_df['historic_kw_cum'] -
-                                  new_df['system_kw_cum_last_year'].astype('float64')) /
-                                  np.where(new_df['sector_abbr'] == 'res', 5.0, 100.0))
-        new_df.drop(columns='historic_kw_cum', inplace=True)
+        new_df['historic_adopters_cum'] = new_df.astype({'historic_adopters_cum':'float64'}).groupby(['group','sector_abbr'])['historic_adopters_cum'].transform('sum')
+        new_df['new_adopters'] = new_df['historic_adopters_cum'] - new_df['adopters_cum_last_year'].astype('float64')
+        new_df.drop(columns=['historic_adopters_cum','historic_kw_cum'], inplace=True)
+
     else:
         # enforce maximum market share constraint at agent level
         max_prop = new_df.pred_prop.where(new_df.new_adopters==0,
