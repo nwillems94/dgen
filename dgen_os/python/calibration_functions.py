@@ -146,7 +146,6 @@ def assemble_market_data(df):
                                     .groupby(['state_abbr','county_id','sector_abbr','year'])
                                     .sum().rename(columns={'imputed_cum_size_kW':'observed_capacity_kw'})
                                     .reset_index())#.query("year in [2014,2016,2018]"))
-    historical_county_capacity_df.sector_abbr.replace('commercial', 'com', inplace=True)
 
     historical_county_capacity_df = historical_county_capacity_df.query("sector_abbr in @df.sector_abbr.unique() & year in [2014,2016,2018]")
 
