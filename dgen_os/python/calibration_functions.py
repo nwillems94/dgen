@@ -116,7 +116,7 @@ def calibrate_Bass(df_grouped):
 
 
 # format data for use in market_grouper
-def assemble_market_data(df):
+def assemble_historic_market_data(df):
     """
     Format solar_agents.df for market_grouper
     (ie merge historic market data scaled to agent level)
@@ -141,11 +141,12 @@ def assemble_market_data(df):
     df['scale_factor'] =  np.where(df['county_developable_roof_sqft'] == 0, 1.0/df['agent_count'], df['developable_roof_sqft'] / df['county_developable_roof_sqft'])
  
     ## Bring in market data for calibration    
-    historical_county_capacity_df = pd.read_csv(config.OBSERVED_DEPLOYMENT_BY_COUNTY)[['state_abbr','county_id','sector_abbr','year','imputed_cum_size_kW']]
+    historical_county_capacity_df = pd.read_csv(config.OBSERVED_DEPLOYMENT_BY_COUNTY)
     historical_county_capacity_df = (historical_county_capacity_df
                                     .groupby(['state_abbr','county_id','sector_abbr','year'])
-                                    .sum().rename(columns={'imputed_cum_size_kW':'observed_capacity_kw'})
-                                    .reset_index())#.query("year in [2014,2016,2018]"))
+                                    .agg(observed_solar_kw=('imputed_cum_size_kW','sum'),
+                                         observed_solar_count=('imputed_cum_count','sum'))
+                                    .reset_index())
 
     historical_county_capacity_df = historical_county_capacity_df.query("sector_abbr in @df.sector_abbr.unique() & year in [2014,2016,2018]")
 
@@ -153,12 +154,9 @@ def assemble_market_data(df):
     market_data = pd.merge(df, historical_county_capacity_df, how='left', on=['state_abbr', 'county_id', 'sector_abbr'])
     
     # use scale factor to constrain agent capacity values to historical values
-    market_data['system_kw_cum'] = market_data['scale_factor'] * market_data['observed_capacity_kw']
+    market_data[['system_kw_cum','number_of_adopters']] = market_data[['observed_solar_kw','observed_solar_count']].multiply(market_data['scale_factor'], axis="index")
     
-    # recalculate number of adopters using anecdotal values
-    market_data['number_of_adopters'] = np.where(market_data['sector_abbr'] == 'res', market_data['system_kw_cum']/5.0, market_data['system_kw_cum']/100.0)
-    
-    market_data.drop(columns=['agent_count', 'county_developable_roof_sqft', 'observed_capacity_kw', 'scale_factor'], inplace=True)
+    market_data.drop(columns=['agent_count','county_developable_roof_sqft','observed_solar_kw','observed_solar_count','scale_factor'], inplace=True)
     
     return market_data
 
