@@ -143,8 +143,8 @@ def create_output_schema(pg_conn_string, role, suffix, scenario_list, source_sch
     suffix_microsecond = datetime.now().strftime('%f')
     logger.info('Creating output schema based on {source_schema}'.format(**inputs))
 
-    con, cur = utilfunc.make_con(pg_conn_string, role="postgres")
-    #con, cur = utilfunc.make_con(pg_conn_string, role="diffusion-schema-writers")
+    #con, cur = utilfunc.make_con(pg_conn_string, role="postgres")
+    con, cur = utilfunc.make_con(pg_conn_string, role="diffusion-writers")
 
     # check that the source schema exists
     sql = """SELECT count(*)
@@ -190,8 +190,8 @@ def drop_output_schema(pg_conn_string, schema, delete_output_schema):
     if delete_output_schema == True:
         logger.info('Dropping the Output Schema ({}) from Database'.format(schema))
 
-        con, cur = utilfunc.make_con(pg_conn_string, role="postgres")
-        #con, cur = utilfunc.make_con(pg_conn_string, role="diffusion-schema-writers")
+        #con, cur = utilfunc.make_con(pg_conn_string, role="postgres")
+        con, cur = utilfunc.make_con(pg_conn_string, role="diffusion-writers")
         sql = '''DROP SCHEMA IF EXISTS {schema} CASCADE;'''.format(**inputs)
         cur.execute(sql)
         con.commit()
