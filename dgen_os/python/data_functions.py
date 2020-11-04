@@ -45,13 +45,13 @@ pg.extensions.register_type(DEC2FLOAT)
 def create_tech_subfolders(out_scen_path, techs, out_subfolders):
     """
     Creates subfolders for results of each specified technology
-    
+
     Parameters
     ----------
     **out_scen_path** : 'directory'
         Path for the scenario folder to send results
     **techs** : 'string'
-        Technology type 
+        Technology type
     **out_subfolders** : 'dict'
         Dictionary of empty subfolder paths for solar
 
@@ -74,20 +74,20 @@ def create_tech_subfolders(out_scen_path, techs, out_subfolders):
 def create_scenario_results_folder(input_scenario, scen_name, scenario_names, out_dir, dup_n=0):
     """
     Creates scenario results directories
-    
+
     Parameters
     ----------
     **input_scenario** : 'directory'
         Scenario inputs pulled from excel file within diffusion/inputs_scenarios folder
     **scen_name** : 'string'
-        Scenario Name 
+        Scenario Name
     **scenario_names** : 'list'
         List of scenario names
     **out_dir** : 'directory'
         Output directory for scenario subfolders
     **dup_n** : 'int'
         Number to track duplicate scenarios in scenario_names. Default is 0 unless otherwise specified.
-    
+
     Returns
     -------
     out_scen_path : 'directory'
@@ -118,20 +118,20 @@ def create_scenario_results_folder(input_scenario, scen_name, scenario_names, ou
 def create_output_schema(pg_conn_string, role, suffix, scenario_list, source_schema='diffusion_template', include_data=True):
     """
     Creates output schema that will be dropped into the database
-    
+
     Parameters
     ----------
     **pg_conn_string** : 'string'
         String to connect to pgAdmin database
     **role** : 'string'
-        Owner of schema 
+        Owner of schema
     **suffix** : 'string'
         String to mark the time that model is kicked off. Added to end of schema to act as a unique indentifier
     **source_schema** : 'SQL schema'
         Schema to be used as template for the output schema
     **include_data** : 'bool'
         If True includes data from diffusion_shared schema. Default is False
-    
+
     Returns
     -------
     dest_schema : 'SQL schema'
@@ -143,7 +143,7 @@ def create_output_schema(pg_conn_string, role, suffix, scenario_list, source_sch
     suffix_microsecond = datetime.now().strftime('%f')
     logger.info('Creating output schema based on {source_schema}'.format(**inputs))
 
-    con, cur = utilfunc.make_con(pg_conn_string, role="postgres")
+    con, cur = utilfunc.make_con(pg_conn_string, role="diffusion-writers")
     #con, cur = utilfunc.make_con(pg_conn_string, role="diffusion-schema-writers")
 
     # check that the source schema exists
@@ -173,7 +173,7 @@ def create_output_schema(pg_conn_string, role, suffix, scenario_list, source_sch
 def drop_output_schema(pg_conn_string, schema, delete_output_schema):
     """
     Deletes output schema from database if set to true
-    
+
     Parameters
     ----------
     **pg_conn_string** : 'string'
@@ -182,7 +182,7 @@ def drop_output_schema(pg_conn_string, schema, delete_output_schema):
         Schema that will be deleted
     **delete_output_schema** : 'bool'
         If set to True in config.py, deletes output schema
-    
+
     """
 
     inputs = locals().copy()
@@ -190,7 +190,7 @@ def drop_output_schema(pg_conn_string, schema, delete_output_schema):
     if delete_output_schema == True:
         logger.info('Dropping the Output Schema ({}) from Database'.format(schema))
 
-        con, cur = utilfunc.make_con(pg_conn_string, role="postgres")
+        con, cur = utilfunc.make_con(pg_conn_string, role="diffusion-writers")
         #con, cur = utilfunc.make_con(pg_conn_string, role="diffusion-schema-writers")
         sql = '''DROP SCHEMA IF EXISTS {schema} CASCADE;'''.format(**inputs)
         cur.execute(sql)
@@ -203,13 +203,13 @@ def drop_output_schema(pg_conn_string, schema, delete_output_schema):
 def get_sectors(cur, schema):
     '''
     Return the sectors to model from table view in postgres.
-        
+
     Parameters
-    ----------    
+    ----------
     **cur** : 'SQL cursor'
         Cursor
     **schema** : 'SQL schema'
-        Schema in which the sectors exist        
+        Schema in which the sectors exist
 
     Returns
     -------
@@ -227,7 +227,7 @@ def get_sectors(cur, schema):
 
 def get_technologies(con, schema):
 
-    sql = """SELECT 
+    sql = """SELECT
                 CASE WHEN run_tech = 'Solar Only' THEN 'solar'::text
                      WHEN run_tech = 'Solar + Storage (Not Available Yet)' THEN 'solar'::text
                 END AS tech
@@ -346,18 +346,18 @@ def get_rate_escalations(con, schema):
     '''
     Get rate escalation multipliers from database. Escalations are filtered and applied in calc_economics,
     resulting in an average real compounding rate growth. This rate is then used to calculate cash flows
-    
+
     IN: con - connection to server
     OUT: DataFrame with county_id, sector, year, escalation_factor, and source as columns
-    '''  
+    '''
     inputs = locals().copy()
-    
+
     sql = """SELECT year, county_id, sector_abbr, nerc_region_abbr,
                     escalation_factor as elec_price_multiplier
             FROM {schema}.rate_escalations_to_model
             ORDER BY year, county_id, sector_abbr""".format(**inputs)
     rate_escalations = pd.read_sql(sql, con, coerce_float = False)
-    
+
     return rate_escalations
 
 
@@ -374,9 +374,9 @@ def get_load_growth(con, schema):
 
 
 def get_technology_costs_solar(con, schema):
-    
+
     inputs = locals().copy()
-    
+
     sql = """SELECT year,
                     sector_abbr,
                     system_capex_per_kw,
@@ -385,9 +385,9 @@ def get_technology_costs_solar(con, schema):
             FROM {schema}.input_pv_prices_to_model;""".format(inputs)
     df = pd.read_sql(sql, con, coerce_float = False)
 
-    return df 
+    return df
 
-    
+
 def get_annual_inflation(con, schema):
     '''
     Get inflation rate (constant for all years & sectors)
@@ -429,7 +429,7 @@ def create_model_years(start_year, end_year, increment=2):
 def summarize_scenario(scenario_settings, model_settings):
 
     # summarize high level secenario settings
-    logger.info('Scenario Settings:')   
+    logger.info('Scenario Settings:')
     logger.info('\tScenario Name: {}'.format(scenario_settings.scen_name))
     logger.info('\tRegion: {}'.format(scenario_settings.region))
     logger.info('\tSectors: {}'.format(list(scenario_settings.sectors.values())))
@@ -463,20 +463,20 @@ def get_scenario_options(cur, schema, pg_params):
 def get_nem_state(con, schema):
     sql = "SELECT *, 'BAU'::text as scenario FROM diffusion_shared.nem_state_limits_2019;"
     df = pd.read_sql(sql, con, coerce_float=False)
-    
+
     return df
 
 def get_nem_state_by_sector(con, schema):
     sql = "SELECT *, 'BAU'::text as scenario FROM diffusion_shared.nem_scenario_bau_2019;"
     df = pd.read_sql(sql, con, coerce_float=False)
-    
+
     # special handling of DC: we don't know system size until bill calculator and differing compensation styles will
     # potentially result in different optimal system sizes. Here we assume only res customers (assumed system_size_kw < 100)
     # are eligible for full retail net metering; com/ind (assumed system_size_kw >= 100) only eligible for net billing.
     df = df[~((df['state_abbr'] == 'DC') & (df['sector_abbr'] == 'res') & (df['compensation_style'] == 'net billing'))]
     df = df[~((df['state_abbr'] == 'DC') & (df['sector_abbr'] != 'res') & (df['compensation_style'] == 'net metering'))]
     df['min_pv_kw_limit'] = np.where(((df['state_abbr'] == 'DC') & (df['sector_abbr'] != 'res')), 0., df['min_pv_kw_limit'])
-    
+
     df.rename(columns={'max_pv_kw_limit':'nem_system_kw_limit'}, inplace=True)
 
     return df
@@ -484,7 +484,7 @@ def get_nem_state_by_sector(con, schema):
 def get_nem_utility_by_sector(con, schema):
     sql = "SELECT *, 'BAU'::text as scenario FROM diffusion_shared.nem_scenario_bau_by_utility_2019;"
     df = pd.read_sql(sql, con, coerce_float=False)
-    
+
     df.rename(columns={'max_pv_kw_limit':'nem_system_kw_limit'}, inplace=True)
 
     return df
@@ -501,5 +501,5 @@ def get_state_to_model(con, schema):
     df = pd.read_sql(sql, con, coerce_float=False)
 
     state_to_model = df.state_abbr.tolist()
-    
+
     return state_to_model

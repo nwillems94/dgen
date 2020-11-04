@@ -18,7 +18,7 @@ pg_params_file = 'pg_params_atlas.json'
 
 #load_path = '/Users/asekar/Documents/dgen_beta/dgen_os/input_data/OS_dGen_Beta_Load_Meta_Data/res/state_data/state_timeseries/DE_timeseries.parquet'
 #load_path = '/Users/asekar/Documents/dgen_beta/dgen_os/input_data/OS_dGen_Beta_Load_Meta_Data/res/national_data/usa_timeseries.parquet'
-load_path = '/Users/asekar/Documents/dgen_beta/dgen_os/input_data/OS_dGen_Beta_Load_Meta_Data/res/national_data/SFS_timeseries.parquet'
+load_path = '/Users/asekar/Documents/OS_dGen_Beta_Load_Meta_Data/res/national_data/SFS_timeseries.parquet'
 
 #==============================================================================
 #   model start year

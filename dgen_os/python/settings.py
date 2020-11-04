@@ -234,7 +234,7 @@ class ModelSettings(object):
                 check_type(self.get(property_name), bool)
             except TypeError as e:
                 raise TypeError('Invalid {0}: {1}'.format(property_name, e))
-                
+
         elif property_name == 'dynamic_system_sizing':
             # check type
             try:
@@ -470,7 +470,7 @@ def init_model_settings():
     # add the config to model settings; set model starting time, output directory based on run time, etc.
     model_settings.add_config(config)
     model_settings.set('model_init', utilfunc.get_epoch_time())
-    model_settings.set('role', 'postgres')
+    model_settings.set('role', 'diffusion_writers')
     #model_settings.set('role', 'diffusion-writers')
     model_settings.set('cdate', utilfunc.get_formatted_time())
     model_settings.set('out_dir', datfunc.make_output_directory_path(model_settings.cdate))
