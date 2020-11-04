@@ -1,8 +1,9 @@
-    {   
-    "dbname": "dgen_db",
-    "host": "127.0.0.1",
+    {
+    "dbname": "dgen_db_fy20q4_opensource_beta",
+    "host": "atlas.nrel.gov",
     "port": "5432",
-    "user": "postgres",
-    "password": "postgres"
+    "user": "asekar",
+    "password": "asekar"
     }
+
 
