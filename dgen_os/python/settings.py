@@ -444,7 +444,8 @@ def init_model_settings():
     # add the config to model settings; set model starting time, output directory based on run time, etc.
     model_settings.add_config(config)
     model_settings.set('model_init', utilfunc.get_epoch_time())
-    model_settings.set('role', 'postgres')
+    #model_settings.set('role', 'postgres')
+    model_settings.set('role', 'diffusion-writers')
     model_settings.set('cdate', utilfunc.get_formatted_time())
     model_settings.set('out_dir', datfunc.make_output_directory_path(model_settings.cdate))
     model_settings.set('input_data_dir', '{}/input_data'.format(os.path.dirname(os.getcwd())))

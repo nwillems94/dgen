@@ -1,8 +1,8 @@
     {   
-    "dbname": "dgen_db_fy20q4_opensource_beta",
-    "host": "atlas.nrel.gov",
+    "dbname": "dgen_db_fy20q4_opensource_final",
+    "host": "1lv11dnpg01.nrel.gov",
     "port": "5432",
     "user": "asekar",
     "password": "asekar"
     }
-
+    
