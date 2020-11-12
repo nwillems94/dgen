@@ -223,7 +223,7 @@ def apply_financial_params(dataframe, financing_terms, itc_options, inflation_ra
 
     dataframe = dataframe.reset_index()
 
-    dataframe = dataframe.merge(financing_terms, how='left', on=['year', 'sector_abbr'])
+    dataframe = dataframe.merge(financing_terms, how='left', on=['year','bin_id', 'sector_abbr'])
 
     dataframe = dataframe.merge(itc_options[['itc_fraction_of_capex', 'year', 'tech', 'sector_abbr']], 
                                 how='left', on=['year', 'tech', 'sector_abbr'])
