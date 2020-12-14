@@ -219,7 +219,7 @@ def calc_diffusion_market_share(df, is_first_year):
     # Current assumption is that only payback and MBS are being used, that pp is bounded [0-30] and MBS bounded [0-120]
        
     df = calc_equiv_time(df); # find the 'equivalent time' on the newly scaled diffusion curve
-    if is_first_year == True:
+    if is_first_year:
         df['teq2'] = df['bass_params_teq'] + df['teq_yr1']
     else:
         df['teq2'] = df['bass_params_teq'] + 2 # now step forward two years from the 'new location'
