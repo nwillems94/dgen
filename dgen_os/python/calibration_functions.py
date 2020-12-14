@@ -165,7 +165,7 @@ def assemble_historic_market_data(df):
 
 
 
-def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zeros=True, verbose=False):
+def market_grouper(county_attr, df, grouping_method, nclusters_last_year, kmeans_vars=[], exclude_zeros=True, verbose=False):
     """
     Group agents into markets using a grouping_method and additional attributes
 
@@ -190,6 +190,7 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
     """
 
     # check to make sure vars exist in dataframes
+    county_attr['state_fips'] = county_attr.fips_code.astype(str).str.zfill(5).str[:2].astype(int)
     df_vars = set(kmeans_vars) - set(county_attr.columns)
     if len(df_vars - set(df.columns)) != 0:
         print('Dropping the following variables which were not found in agent attributes or solar_agents.df')
@@ -210,24 +211,37 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
         agent_group = agent_group[~agent_group.county_id.isin(zero_counties)]
     
     ##GROUPING
+    n_clusters_best = np.nan
 
     #group using **K MEANS** clustering
     if grouping_method == "kmeans":
         print("grouping using kmeans clustering")
 
         #scale data around mean and to unit variance before clustering
+        #and determine upper and lower bounds for range of number of clusters to search over
+        min_clusters = 2
         if len(kmeans_vars) == 1:
             # reshaping is required if there is only a single variable
             data = agent_group.loc[:, kmeans_vars].to_numpy(copy=True).reshape(-1,1)
+            max_clusters = agent_group[kmeans_vars+['county_id']].nunique().min()
         else:
             data = agent_group.loc[:, kmeans_vars]
+            max_clusters = agent_group.county_id.nunique() // 2
+
         scaled = StandardScaler().fit(data)
         X = scaled.transform(data)
-        
+
+        # if a number of clusters has already been selected, only search in its neighborhood
+        if nclusters_last_year != 0:
+            cluster_range = max(5, max_clusters//10)
+            max_clusters = min(nclusters_last_year + cluster_range, max_clusters)
+            min_clusters = max(nclusters_last_year - cluster_range, min_clusters)
+
         silhouette_best = -1
         n_clusters_best = 1
         labels_best = 0
-        for n_clusters in range(2, agent_group.county_id.nunique()//2):
+
+        for n_clusters in range(min_clusters, max_clusters+1):
         
             # Initialize the clusterer with n_clusters value and a random seed
             clusterer = KMeans(n_clusters=n_clusters, random_state=10)
@@ -277,7 +291,7 @@ def market_grouper(county_attr, df, grouping_method, kmeans_vars=[], exclude_zer
     agent_group = pd.merge(agent_group, df, on='agent_id', suffixes=(None, '_redundant'))
     agent_group = agent_group[['group','agent_id','developable_agent_weight','max_market_share']]
 
-    return agent_group
+    return agent_group, n_clusters_best
 
 ####****---- END OF FUNCTION market_grouper ----****####
 # ==================================================================================================================== #

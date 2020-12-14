@@ -249,9 +249,11 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
 
                         if is_first_year == False:
                             solar_agents.df = calib.tune_maximum_market_share(solar_agents.df)
+                        else:
+                            n_clusters_last_year = 0
 
                         agent_attr = refUSA.copy()
-                        grouping_vars = ['avg_elec_price_cents_per_kwh', 'avg_monthly_kwh','pct_of_bldgs_developable', 'WEALTH_FINDER_SCORE', 'PPI_DIV_1000']
+                        grouping_vars = ['state_fips','payback_period','value_of_resiliency_usd','avg_elec_price_cents_per_kwh', 'pct_of_bldgs_developable', 'WEALTH_FINDER_SCORE', 'PPI_DIV_1000']
                         if "year" in agent_attr.columns:
                             attr_year = agent_attr.year.unique()[np.abs(agent_attr.year.unique() - year).argmin()]
                             agent_attr = agent_attr.query("year == @attr_year")
@@ -267,8 +269,8 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
                             market_data_this_year = pd.merge(solar_agents.df.reset_index(), market_data.query("year==@year"),
                                                              on='agent_id', suffixes=('_redundant', None))
                         
-                        agent_groups = calib.market_grouper(agent_attr, market_data_this_year,
-                                                            "kmeans", kmeans_vars=grouping_vars, verbose=True)
+                        agent_groups, n_clusters_last_year = calib.market_grouper(agent_attr, market_data_this_year, "kmeans",
+                                                                                 n_clusters_last_year, kmeans_vars=grouping_vars, verbose=True)
                         # combine the groups with historical market data
                         agent_groups = agent_groups.merge(market_data, on='agent_id')
                         # calibrate Bass parameters at the market level
