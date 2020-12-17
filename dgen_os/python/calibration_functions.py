@@ -215,16 +215,20 @@ def market_grouper(county_attr, df, grouping_method, nclusters_last_year, kmeans
 
     #group using **K MEANS** clustering
     if grouping_method == "kmeans":
-        print("grouping using kmeans clustering")
+        if len(kmeans_vars) == 0:
+            #fallback clustering variable is states
+            kmeans_vars = ['state_fips']
 
         #scale data around mean and to unit variance before clustering
         #and determine upper and lower bounds for range of number of clusters to search over
         min_clusters = 2
         if len(kmeans_vars) == 1:
+            print("grouping using " + kmeans_vars[0])
             # reshaping is required if there is only a single variable
             data = agent_group.loc[:, kmeans_vars].to_numpy(copy=True).reshape(-1,1)
             max_clusters = agent_group[kmeans_vars+['county_id']].nunique().min()
         else:
+            print("grouping using kmeans clustering")
             data = agent_group.loc[:, kmeans_vars]
             max_clusters = agent_group.county_id.nunique() // 2
 
