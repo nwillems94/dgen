@@ -27,7 +27,7 @@ logger = utilfunc.get_logger()
 @decorators.fn_timer(logger = logger, tab_level = 2, prefix = '')
 def calc_diffusion_solar(df, is_first_year, bass_params, year,
                            override_p_value = None, override_q_value = None, override_teq_yr1_value = None,
-                           no_constraint=False, id_var="state_abbr"):
+                           no_constraint=False, id_var="state_abbr", out_dir=""):
     """
     Calculates the market share (ms) added in the solve year. Market share must be less
     than max market share (mms) except initial ms is greater than the calculated mms.
@@ -82,6 +82,18 @@ def calc_diffusion_solar(df, is_first_year, bass_params, year,
         df = df.astype({col:'float64' for col in state_vars.keys()})
         df[[*state_vars.values()]] = df.groupby(group_cols)[[*state_vars.keys()]].transform('sum').astype('float64')
         df['agent_count'] = df.groupby(group_cols).agent_id.transform('count').astype('float64')
+
+        # record historical values alongside intial predictions for validation
+        historical_county_capacity = pd.read_csv(config.OBSERVED_DEPLOYMENT_BY_COUNTY).query("year==@year")
+        historical_county_capacity = (historical_county_capacity
+                                      .groupby(group_cols+['county_id'])
+                                      .agg(observed_solar_kw=('imputed_cum_size_kW','sum'),
+                                           observed_solar_count=('imputed_cum_count','sum')))
+
+        predicted_county_capacity = df.groupby(group_cols+['county_id']).agg(predicted_solar_kw=('system_kw_cum','sum'),
+                                                                             predicted_solar_count=('number_of_adopters','sum'))
+        validation_data = predicted_county_capacity.join(historical_county_capacity)
+        validation_data.to_csv(out_dir + '/validation_' + str(year) + '.csv')
         
         # read csv of historical capacity values by state and sector
         historical_state_df = pd.read_csv(config.OBSERVED_DEPLOYMENT_BY_STATE)
@@ -304,7 +316,7 @@ def calc_equiv_time(df):
 
 
 #=============================================================================
-def propensity_model(df, bass_params, agent_groups, year, is_first_year):
+def propensity_model(df, bass_params, agent_groups, year, is_first_year, out_dir):
     """
     Use a propensity model to calculate diffusion:
         - Use Bass diffusion to calculate the total adoption in a group
@@ -399,6 +411,19 @@ def propensity_model(df, bass_params, agent_groups, year, is_first_year):
     for key, value in new_vals_dict.items():
         new_df[key] = new_df[last_year_dict[key]] + new_df[value]
     new_df['market_share'] = new_df['market_share_last_year'] + new_df['new_market_share']
+
+    if year in (2014, 2016, 2018):
+        # record historical values alongside predictions for validation
+        historical_county_capacity = pd.read_csv(config.OBSERVED_DEPLOYMENT_BY_COUNTY).query("year==@year")
+        historical_county_capacity = (historical_county_capacity
+                                     .groupby(['state_abbr','sector_abbr','year','county_id'])
+                                     .agg(observed_solar_kw=('imputed_cum_size_kW','sum'),
+                                          observed_solar_count=('imputed_cum_count','sum')))
+        predicted_county_capacity = new_df.groupby(['state_abbr','sector_abbr','year','county_id']).agg(predicted_solar_kw=('system_kw_cum','sum'),
+                                                                                                        predicted_solar_count=('number_of_adopters','sum'))
+        validation_data = predicted_county_capacity.join(historical_county_capacity)
+        validation_data.to_csv(out_dir + '/validation_' + str(year) + '.csv')
+
 
     # create the dataframe of last years values
     market_last_year_df = new_df.copy()[['agent_id', 'new_system_kw',

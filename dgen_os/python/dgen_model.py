@@ -303,15 +303,14 @@ def main(mode = None, resume_year = None, endyear = None, ReEDS_inputs = None):
 
                         logger.info('\t\tUsing Propensity model with fits from {}'.format(propensity_year))
                         solar_agents.df, market_last_year_df = \
-                            diffusion_functions_elec.propensity_model(solar_agents.df.copy(),
-                                                                        bass_params, agent_groups,
-                                                                        year, is_first_year)
+                            diffusion_functions_elec.propensity_model(solar_agents.df.copy(), bass_params, agent_groups,
+                                                                      year, is_first_year, out_dir)
                     else:
                         # Calculate diffusion based on economics and bass diffusion
                         if model_settings.realtime_calibration == True:
-                            solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year, id_var='agent_id')
+                            solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year, id_var='agent_id', out_dir=out_dir)
                         else:
-                            solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year)
+                            solar_agents.df, market_last_year_df = diffusion_functions_elec.calc_diffusion_solar(solar_agents.df, is_first_year, bass_params, year, out_dir=out_dir)
 
                     if model_settings.realtime_calibration == True:
                         if year > market_data.year.max():
